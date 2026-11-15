@@ -9,6 +9,7 @@ body{display:flex;flex-direction:column}
 .bar h1{font-size:17px;margin:0;flex:1}
 .mission-day{font-size:14px;font-weight:700;letter-spacing:1px;color:var(--cyan);border:1px solid #1e4a5a;border-radius:8px;padding:4px 10px;background:rgba(8,14,28,.85);white-space:nowrap}
 .mission-day.finished{color:#f1c40f;border-color:#f1c40f}
+.mission-clock{color:#7ff3ff;font-variant-numeric:tabular-nums}
 .legend{display:flex;gap:14px;color:var(--muted);font-size:13px}
 /* Acciones de la partida (HTML, en la cabecera): reiniciar o salir al menu.
    Son los unicos botones de control del juego fuera del menu. */
@@ -21,6 +22,9 @@ body{display:flex;flex-direction:column}
 .dot.ok{background:rgb(var(--ok))}.dot.warn{background:rgb(var(--warn))}.dot.crit{background:rgb(var(--crit))}
 
 .layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0;padding:0;align-items:start;flex:1 1 auto;overflow:hidden;min-height:0}
+/* En pantallas anchas el mapa + panel no se estiran hasta los bordes: el
+   conjunto queda centrado (v13) y no queda un hueco vacio a la derecha. */
+.layout{width:100%;max-width:1480px;margin:0 auto;align-self:center}
 @media(max-width:820px){
   /* Movil: una columna, la pagina hace scroll y el mapa se ve entero.
      Sin esto el .stage con height:100% empujaba el panel fuera de la
@@ -79,6 +83,17 @@ button:hover{filter:brightness(1.15)}
 
 /* ---------- Vista de sección ---------- */
 .detail{position:fixed;inset:0;background:rgba(5,8,16,.85);display:grid;place-items:center;padding:16px;z-index:10}
+/* Pantalla de fin de mision (v13): score con desglose. */
+.end-screen{position:fixed;inset:0;background:rgba(5,8,16,.92);display:grid;place-items:center;padding:16px;z-index:20}
+.end-screen[hidden]{display:none}
+.end-card{background:var(--panel);border:1px solid #f1c40f;border-radius:12px;padding:24px;max-width:520px;width:100%}
+.end-card h2{margin:0 0 4px;font-size:22px;color:#f1c40f}
+.end-score{margin:14px 0;font-size:15px}
+.end-score .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)}
+.end-score .row.total{font-weight:700;font-size:18px;border-bottom:none;color:#2ecc71}
+.end-actions{display:flex;gap:10px;margin-top:16px}
+.end-actions .primary{flex:1;margin-top:0}
+.end-actions .ghost{flex:1}
 .detail[hidden]{display:none}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;max-width:560px;width:100%}
 

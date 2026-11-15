@@ -24,23 +24,82 @@ const HUD = [
 // bonus = puntos al completar (100 por paso + bonus al final).
 // datos = DATA que genera la mision durante el juego.
 // Los numeros son valores de JUEGO para la demo, no datos reales de ingenieria.
+// v14: cada mision indica sus orbitas buenas (orbits[]), su instrumento
+// clave (instrumento, null si la mision no depende de uno) y si necesita
+// propulsion para acercarse/acoplarse (needsPropulsion).
 const MISSIONS = [
-  { id:"SATELLITE REPAIR", desc:"Approach, capture with the arm and repair a satellite. Best: LEO + Falcon 9. Completion +200.", orbit:"LEO", launcher:["FALCON 9"], bonus:200, datos:0 },
-  { id:"CARGO CAPTURE", desc:"Catch a Dragon / Cygnus cargo ship with the arm and dock it. Best: LEO + Falcon 9. Completion +200.", orbit:"LEO", launcher:["FALCON 9"], bonus:200, datos:0 },
-  { id:"SPACEWALK (EVA)", desc:"Astronauts go out to repair, install or collect samples. Abort on solar storm. Best: LEO + Falcon 9. Completion +200.", orbit:"LEO", launcher:["FALCON 9"], bonus:200, datos:0 },
-  { id:"CUBESAT DEPLOY", desc:"Design, deploy and track a small satellite from the airlock. Best: LEO + Falcon 9. Completion +200, +DATA.", orbit:"LEO", launcher:["FALCON 9"], bonus:200, datos:40 },
-  { id:"MICROGRAVITY SCIENCE", desc:"Veggie / APH crops and BASS / SAFFIRE combustion. Best: LEO + Falcon 9. Completion +200, +DATA.", orbit:"LEO", launcher:["FALCON 9"], bonus:200, datos:40 },
-  { id:"EARTH OBSERVATION", desc:"Monitor fires, hurricanes and floods; send data to ground teams. Best: LEO + Falcon 9. Completion +200, +DATA.", orbit:"LEO", launcher:["FALCON 9"], bonus:200, datos:40 },
-  { id:"MOON & MARS TECH", desc:"Test on the station what future Moon / Mars missions need. All 6 zones. Best: LEO (heliocentric variant) + Atlas V. Completion +300.", orbit:"LEO", orbitAlt:"HELIOCENTRIC", launcher:["ATLAS V"], bonus:300, datos:0 },
-  { id:"SATELLITE LIFE EXTENSION", desc:"Dock with an old satellite to refuel or replace parts. Best: GEO + Atlas V or Ariane 5. Completion +200.", orbit:"GEO", launcher:["ATLAS V", "ARIANE 5"], bonus:200, datos:0 },
-  { id:"ASTRONOMY", desc:"Observe space from orbit, with less atmospheric interference. Best: LEO + Falcon 9. Completion +200, +DATA.", orbit:"LEO", launcher:["FALCON 9"], bonus:200, datos:40 }
+  { id:"SATELLITE REPAIR", desc:"Approach, capture with the arm and repair a satellite. Best: LEO + Falcon 9. Completion +200.", orbits:["LEO"], launcher:["FALCON 9"], bonus:200, datos:0, instrumento:null, needsPropulsion:true },
+  { id:"CARGO CAPTURE", desc:"Catch a Dragon / Cygnus cargo ship with the arm and dock it. Best: LEO + Falcon 9. Completion +200.", orbits:["LEO"], launcher:["FALCON 9"], bonus:200, datos:0, instrumento:null, needsPropulsion:true },
+  { id:"SPACEWALK (EVA)", desc:"Astronauts go out to repair, install or collect samples. Abort on solar storm. Best: LEO + Falcon 9. Completion +200.", orbits:["LEO"], launcher:["FALCON 9"], bonus:200, datos:0, instrumento:null, needsPropulsion:false },
+  { id:"CUBESAT DEPLOY", desc:"Design, deploy and track a small satellite from the airlock. Best: LEO + Falcon 9. Completion +200, +DATA.", orbits:["LEO"], launcher:["FALCON 9"], bonus:200, datos:40, instrumento:"CAMERA", needsPropulsion:false },
+  { id:"MICROGRAVITY SCIENCE", desc:"Veggie / APH crops and BASS / SAFFIRE combustion. Best: LEO + Falcon 9. Completion +200, +DATA.", orbits:["LEO"], launcher:["FALCON 9"], bonus:200, datos:40, instrumento:"SPECTROMETER", needsPropulsion:false },
+  { id:"EARTH OBSERVATION", desc:"Monitor fires, hurricanes and floods; send data to ground teams. Best: polar or Sun-synchronous + Falcon 9. Completion +200, +DATA.", orbits:["LEO", "POLAR", "SUN-SYNCHRONOUS"], launcher:["FALCON 9"], bonus:200, datos:40, instrumento:"CAMERA", needsPropulsion:false },
+  { id:"MOON & MARS TECH", desc:"Test on the station what future Moon / Mars missions need. All 6 zones. Best: LEO (heliocentric variant) + Atlas V. Completion +300.", orbits:["LEO", "HELIOCENTRIC"], launcher:["ATLAS V"], bonus:300, datos:0, instrumento:"SENSOR SUITE", needsPropulsion:false },
+  { id:"SATELLITE LIFE EXTENSION", desc:"Dock with an old satellite to refuel or replace parts. Best: GEO + Atlas V or Ariane 5. Completion +200.", orbits:["GEO"], launcher:["ATLAS V", "ARIANE 5"], bonus:200, datos:0, instrumento:null, needsPropulsion:true },
+  { id:"ASTRONOMY", desc:"Observe space from orbit, with less atmospheric interference. Best: LEO + Falcon 9. Completion +200, +DATA.", orbits:["LEO"], launcher:["FALCON 9"], bonus:200, datos:40, instrumento:"TELESCOPE", needsPropulsion:false }
 ];
 
 const ORBITS = [
   { id:"LEO", desc:"Low Earth Orbit · 400 km · easy resupply.", masa:12, potencia:8, presupuesto:120, datos:40 },
   { id:"GEO", desc:"Geostationary Orbit · 35,786 km · constant coverage.", masa:18, potencia:12, presupuesto:220, datos:60 },
-  { id:"HELIOCENTRIC", desc:"Heliocentric · beyond Earth orbit · highest risk.", masa:25, potencia:15, presupuesto:350, datos:90 }
+  { id:"HELIOCENTRIC", desc:"Heliocentric · beyond Earth orbit · highest risk.", masa:25, potencia:15, presupuesto:350, datos:90 },
+  { id:"POLAR", desc:"Polar Orbit · 800 km · passes over the poles, covers all Earth.", masa:14, potencia:9, presupuesto:150, datos:70 },
+  { id:"SUN-SYNCHRONOUS", desc:"Sun-synchronous Orbit · 600 km · same sunlight every pass, best for Earth imaging.", masa:13, potencia:9, presupuesto:160, datos:80 }
 ];
+
+// v14: Componentes de la nave (reto 13). El jugador diseña la nave
+// eligiendo 1 opcion por sistema. Cada opcion mueve MASS / POWER /
+// BUDGET / DATA / FUEL y puntua por encaje con la mision. Los numeros son
+// valores de JUEGO, no datos reales de ingenieria. La potencia de un
+// sistema de potencia es NEGATIVA porque GENERA energia (el resto consume).
+// combustible = capacidad del tanque (kg); consumo = gasto por dia (kg/dia).
+const COMPONENT_SYSTEMS = [
+  { key:"spacecraft", name:"Nave espacial", options:[
+    { id:"SMALLSAT", desc:"Pequeña y barata; poca capacidad.", masa:0.5, potencia:0.2, presupuesto:20, datos:0, combustible:0, consumo:0 },
+    { id:"MEDIUM BUS", desc:"Equilibrada; la estándar de la estación.", masa:2, potencia:0.5, presupuesto:60, datos:0, combustible:0, consumo:0 },
+    { id:"LARGE BUS", desc:"Gran capacidad; pesada y cara.", masa:5, potencia:1.0, presupuesto:120, datos:0, combustible:0, consumo:0 } ] },
+  { key:"instruments", name:"Instrumentos científicos", options:[
+    { id:"CAMERA", desc:"Cámara multiespectral; ideal para observar la Tierra.", masa:0.1, potencia:0.1, presupuesto:15, datos:50, combustible:0, consumo:0 },
+    { id:"SPECTROMETER", desc:"Espectrómetro; analiza la composición de muestras y atmósferas.", masa:0.2, potencia:0.2, presupuesto:25, datos:40, combustible:0, consumo:0 },
+    { id:"TELESCOPE", desc:"Telescopio; observa el espacio profundo (no sirve para luz UV).", masa:0.5, potencia:0.3, presupuesto:40, datos:60, combustible:0, consumo:0 },
+    { id:"SENSOR SUITE", desc:"Suite de sensores; medidas generales de todo tipo.", masa:0.15, potencia:0.15, presupuesto:20, datos:30, combustible:0, consumo:0 } ] },
+  { key:"power", name:"Sistema de potencia", options:[
+    { id:"SOLAR PANELS", desc:"Paneles solares; energía del Sol, gratis en LEO.", masa:0.3, potencia:-14, presupuesto:30, datos:0, combustible:0, consumo:0 },
+    { id:"SOLAR + BATTERY", desc:"Paneles + baterías; energía también en la sombra.", masa:0.6, potencia:-18, presupuesto:50, datos:0, combustible:0, consumo:0 },
+    { id:"RTG", desc:"Generador nuclear (RTG); energía constante lejos del Sol.", masa:0.8, potencia:-20, presupuesto:100, datos:0, combustible:0, consumo:0 } ] },
+  { key:"comms", name:"Comunicaciones", options:[
+    { id:"S-BAND", desc:"Banda S; básica, baja velocidad de datos.", masa:0.05, potencia:0.1, presupuesto:10, datos:10, combustible:0, consumo:0 },
+    { id:"X-BAND", desc:"Banda X; estándar de la ISS.", masa:0.1, potencia:0.2, presupuesto:20, datos:30, combustible:0, consumo:0 },
+    { id:"KA-BAND", desc:"Banda Ka; alta velocidad, más potencia.", masa:0.15, potencia:0.4, presupuesto:35, datos:80, combustible:0, consumo:0 } ] },
+  { key:"thermal", name:"Control térmico", options:[
+    { id:"PASSIVE RADIATORS", desc:"Radiadores pasivos; simples, suficientes en LEO.", masa:0.2, potencia:0, presupuesto:15, datos:0, combustible:0, consumo:0 },
+    { id:"ACTIVE THERMAL", desc:"Radiadores + calentadores; control activo para órbitas extremas.", masa:0.4, potencia:0.3, presupuesto:30, datos:0, combustible:0, consumo:0 } ] },
+  { key:"propulsion", name:"Propulsión", options:[
+    { id:"NONE", desc:"Sin propulsión; solo la estación, sin maniobras.", masa:0, potencia:0, presupuesto:0, datos:0, combustible:0, consumo:0 },
+    { id:"CHEMICAL", desc:"Química; empuje fuerte, gasta mucho combustible.", masa:0.5, potencia:0.1, presupuesto:40, datos:0, combustible:200, consumo:10 },
+    { id:"ELECTRIC", desc:"Eléctrica (iónica); eficiente, empuje lento.", masa:0.3, potencia:0.5, presupuesto:60, datos:0, combustible:50, consumo:2 } ] }
+];
+const COMPONENTS_KEY = "xonidu-components-v1";
+let comp = {};
+try {
+  const savedComp = JSON.parse(localStorage.getItem(COMPONENTS_KEY) || "null");
+  if (savedComp) comp = savedComp;
+} catch (e) {}
+function compOption(systemKey) {
+  const sys = COMPONENT_SYSTEMS.find(s => s.key === systemKey);
+  if (!sys) return null;
+  return sys.options.find(o => o.id === comp[systemKey]) || null;
+}
+function compTotals() {
+  const t = { masa:0, potencia:0, presupuesto:0, datos:0, combustible:0, consumo:0 };
+  COMPONENT_SYSTEMS.forEach(sys => {
+    const o = compOption(sys.key);
+    if (!o) return;
+    t.masa += o.masa; t.potencia += o.potencia; t.presupuesto += o.presupuesto;
+    t.datos += o.datos; t.combustible += o.combustible; t.consumo += o.consumo;
+  });
+  return t;
+}
 
 const LAUNCHERS = [
   { id:"FALCON 9", desc:"Capacity 22 t · cost 90 cr.", capacidad:22, costo:90 },
@@ -71,6 +130,16 @@ try {
 // 5 dias siempre; a mas dificultad, mas minutos por dia (la partida dura mas)
 // y umbrales mas sensibles -> aparecen MAS fallos reales de la NASA.
 const DIFFICULTY_KEY = "xonidu-difficulty-v1";
+// v15: cada dificultad trae sus configuraciones POR DEFECTO.
+// Facil (para ninos): TODO configurado — la nave ya viene disenada y solo
+// hay que elegir la mision y jugar. Medio: 3 sistemas listos, el resto se
+// elige. Dificil (para adultos/expertos): NADA configurado — hay que
+// disenar la nave completa y los umbrales son mas estrictos.
+const DIFFICULTY_DEFAULT_COMPONENTS = {
+  facil:   { spacecraft: "MEDIUM BUS", instruments: "CAMERA", power: "SOLAR PANELS", comms: "X-BAND", thermal: "PASSIVE RADIATORS", propulsion: "ELECTRIC" },
+  medio:   { spacecraft: "MEDIUM BUS", power: "SOLAR PANELS", propulsion: "ELECTRIC" },
+  dificil: {}
+};
 const DIFFICULTY_PRESETS = {
   facil:   { days: 5, min_per_day: 1, kp_warn: 5, kp_crit: 7, cme_speed_warn: 350, flr_min_class: "M", attend_window_min: 10, event_fresh_hours: 24 },
   medio:   { days: 5, min_per_day: 2, kp_warn: 5, kp_crit: 7, cme_speed_warn: 350, flr_min_class: "M", attend_window_min: 5, event_fresh_hours: 96 },
@@ -94,7 +163,7 @@ const DEFAULT_CONFIG = {
   attend_window_min: 5,
   score_base: 100, orbit_fit: 20, orbit_miss: -15,
   launcher_fit: 10, launcher_miss: -10,
-  mass_penalty: -20, budget_penalty: -10,
+  mass_penalty: -20, budget_penalty: -10, budget_cap: 500,
   complete_bonus: 200, complete_bonus_hard: 300, data_bonus: 40
 };
 let CFG = Object.assign({}, DEFAULT_CONFIG);
@@ -145,6 +214,21 @@ const STRINGS = {
     hudData: "DATOS",
     objectivesTitle: "Objetivos de la misión",
     objectivesSub: "Elige 1 de 9 misiones. Una partida = una misión; la órbita y el lanzador puntúan por encaje.",
+    pickMissionFirst: "Elige una misión primero (MISSION OBJECTIVES).",
+    btnComponentsTop: "🧩 Componentes",
+    btnRefreshTop: "🔄 Datos NASA",
+    refreshOk: "Datos de la NASA actualizados ✓",
+    refreshFail: "No se pudieron actualizar los datos (revisa el servidor).",
+    refreshPolling: "Actualizando datos de la NASA…",
+    componentsTitle: "Componentes de la nave",
+    componentsSub: "Diseña tu nave: elige 1 opción por sistema. Cada elección mueve MASS, POWER, BUDGET, DATA y FUEL, y puntúa por encaje con la misión. Sin el instrumento clave o sin suficiente potencia o combustible, el diseño no es viable.",
+    componentsCurrent: "Actual",
+    componentsNotChosen: "sin elegir",
+    componentsFuel: "Combustible",
+    componentsFuelLine: "tanque",
+    componentsFuelNeed: "necesita",
+    componentsSummary: "Tu diseño",
+    componentsSaved: "Componente guardado ✓",
     objectivesDuration: "Duración de la misión",
     objectivesDays: "días",
     orbitTitle: "Seleccionar órbita",
@@ -185,7 +269,7 @@ const STRINGS = {
     metricsScoring: "Puntuacion por Mision",
     metricsScoringP: "Cada una de las 9 misiones tiene modulos clave y eventos NASA que la amenazan. Completar una misión sin fallos criticos otorga el puntaje maximo.",
     metricsConfigTitle: "Configurar métricas",
-    metricsConfigSub: "Estos valores los usa el juego ahora mismo. Guardar los escribe en el backend (game_config.json) y se aplican en el siguiente poll de la NASA (cada 5 min) y en el scoring del menú.",
+    metricsConfigSub: "Estos valores los usa el juego ahora mismo. Guardar los escribe en el backend (game_config.json) y se aplican en el siguiente poll de la NASA (cada 60 s) y en el scoring del menú.",
     btnSaveConfig: "Guardar configuración",
     msgSavedBackend: "Guardado en el backend ✓",
     msgSavedLocal: "Guardado solo local (sin backend)",
@@ -232,6 +316,21 @@ const STRINGS = {
     hudData: "DATA",
     objectivesTitle: "Mission Objectives",
     objectivesSub: "Pick 1 of 9 missions. One run = one mission; orbit and launcher score by fit.",
+    pickMissionFirst: "Pick a mission first (MISSION OBJECTIVES).",
+    btnComponentsTop: "🧩 Components",
+    btnRefreshTop: "🔄 NASA Data",
+    refreshOk: "NASA data updated ✓",
+    refreshFail: "Could not update the data (check the server).",
+    refreshPolling: "Updating NASA data…",
+    componentsTitle: "Spacecraft components",
+    componentsSub: "Design your spacecraft: pick 1 option per system. Each choice moves MASS, POWER, BUDGET, DATA and FUEL, and scores by fit with the mission. Without the key instrument, or without enough power or fuel, the design is not viable.",
+    componentsCurrent: "Current",
+    componentsNotChosen: "not chosen",
+    componentsFuel: "Fuel",
+    componentsFuelLine: "tank",
+    componentsFuelNeed: "needs",
+    componentsSummary: "Your design",
+    componentsSaved: "Component saved ✓",
     objectivesDuration: "Mission duration",
     objectivesDays: "days",
     orbitTitle: "Select Orbit",
@@ -272,7 +371,7 @@ const STRINGS = {
     metricsScoring: "Mission Scoring",
     metricsScoringP: "Each of the 9 missions has key modules and NASA events that threaten it. Completing a mission without critical failures grants the maximum score.",
     metricsConfigTitle: "Configure metrics",
-    metricsConfigSub: "These values are used by the game right now. Saving writes them to the backend (game_config.json) and they apply on the next NASA poll (every 5 min) and in the menu scoring.",
+    metricsConfigSub: "These values are used by the game right now. Saving writes them to the backend (game_config.json) and they apply on the next NASA poll (every 60 s) and in the menu scoring.",
     btnSaveConfig: "Save configuration",
     msgSavedBackend: "Saved to backend ✓",
     msgSavedLocal: "Saved locally only (no backend)",
@@ -322,6 +421,10 @@ function applyLang() {
   if (diffBtn) diffBtn.textContent = t("btnDifficultyTop");
   const metricsBtnTop = $("#metricsTopBtn");
   if (metricsBtnTop) metricsBtnTop.textContent = t("btnMetricsTop");
+  const compBtnTop = $("#compTopBtn");
+  if (compBtnTop) compBtnTop.textContent = t("btnComponentsTop");
+  const refreshBtnTop = $("#refreshTopBtn");
+  if (refreshBtnTop) refreshBtnTop.textContent = t("btnRefreshTop");
   const backBtn = $("#backBtn");
   if (backBtn) backBtn.textContent = t("btnBack");
   if (!$("#detail").hidden) route();
@@ -340,11 +443,13 @@ function applyLang() {
 function computeMissionScore(cfg) {
   let score = CFG.score_base, feasible = true;
   const notes = [];
+  const ct = compTotals();
   if (cfg.objetivo && cfg.orbita) {
-    if (cfg.orbita.id === cfg.objetivo.orbit || cfg.orbita.id === cfg.objetivo.orbitAlt) {
+    const good = cfg.objetivo.orbits || [cfg.objetivo.orbit];
+    if (good.indexOf(cfg.orbita.id) !== -1) {
       score += CFG.orbit_fit; notes.push("Orbit fits the mission (+" + CFG.orbit_fit + ").");
     } else {
-      score += CFG.orbit_miss; notes.push("Orbit does not fit " + cfg.objetivo.id + " (best: " + cfg.objetivo.orbit + ", " + CFG.orbit_miss + ").");
+      score += CFG.orbit_miss; notes.push("Orbit does not fit " + cfg.objetivo.id + " (best: " + good.join(" / ") + ", " + CFG.orbit_miss + ").");
     }
   }
   if (cfg.objetivo && cfg.lanzador) {
@@ -354,13 +459,55 @@ function computeMissionScore(cfg) {
       score += CFG.launcher_miss; notes.push("Launcher does not fit " + cfg.objetivo.id + " (best: " + cfg.objetivo.launcher.join(" or ") + ", " + CFG.launcher_miss + ").");
     }
   }
-  if (cfg.orbita && cfg.lanzador) {
-    if (cfg.orbita.masa > cfg.lanzador.capacidad) {
-      score += CFG.mass_penalty; feasible = false;
-      notes.push("Launcher cannot lift the mission mass (" + cfg.orbita.masa + " t > " + cfg.lanzador.capacidad + " t).");
+  // Componentes: instrumento clave de la mision (+20), potencia neta y
+  // combustible. La potencia neta es lo que consume la mision menos lo
+  // que genera el sistema de potencia; si es positiva falta energia.
+  if (cfg.objetivo && cfg.objetivo.instrumento) {
+    const inst = compOption("instruments");
+    if (inst && inst.id === cfg.objetivo.instrumento) {
+      score += 20; notes.push("Key instrument for this mission: " + inst.id + " (+20).");
+    } else {
+      notes.push("This mission works best with " + cfg.objetivo.instrumento + " (pick it in Components).");
     }
-    const cost = cfg.orbita.presupuesto + cfg.lanzador.costo;
-    if (cost > 400) { score += CFG.budget_penalty; notes.push("Budget overrun: " + cost + " cr."); }
+  }
+  // Potencia: solo se penaliza si YA eligio un sistema de potencia y
+  // aun asi falta energia. Si todavia no eligio, solo se le avisa.
+  if (cfg.orbita) {
+    const powerOpt = compOption("power");
+    if (powerOpt) {
+      const netPower = cfg.orbita.potencia + ct.potencia;
+      if (netPower > 0) {
+        score -= 20; feasible = false;
+        notes.push("Not enough power: the mission needs " + cfg.orbita.potencia + " kW and the power system generates " + (-ct.potencia) + " kW (deficit " + netPower + " kW).");
+      }
+    } else {
+      notes.push("Pick a power system in Components.");
+    }
+  }
+  // Propulsion: solo se penaliza si YA eligio (incluido NONE) y es
+  // insuficiente. Si todavia no eligio, solo se le avisa.
+  if (cfg.objetivo && cfg.objetivo.needsPropulsion) {
+    const prop = compOption("propulsion");
+    if (prop) {
+      if (prop.id === "NONE") {
+        score -= 20; feasible = false;
+        notes.push("This mission needs propulsion to rendezvous/dock (pick one in Components).");
+      } else if (prop.combustible < prop.consumo * missionDays) {
+        score -= 20; feasible = false;
+        notes.push("Not enough fuel: " + prop.combustible + " kg on board, the mission needs " + (prop.consumo * missionDays) + " kg (" + prop.consumo + " kg/day × " + missionDays + " days).");
+      }
+    } else {
+      notes.push("This mission needs propulsion (pick one in Components).");
+    }
+  }
+  if (cfg.orbita && cfg.lanzador) {
+    const totalMass = cfg.orbita.masa + ct.masa;
+    if (totalMass > cfg.lanzador.capacidad) {
+      score += CFG.mass_penalty; feasible = false;
+      notes.push("Launcher cannot lift the mission mass (" + totalMass.toFixed(1) + " t > " + cfg.lanzador.capacidad + " t).");
+    }
+    const cost = cfg.orbita.presupuesto + cfg.lanzador.costo + ct.presupuesto;
+    if (cost > CFG.budget_cap) { score += CFG.budget_penalty; notes.push("Budget overrun: " + cost + " cr (cap " + CFG.budget_cap + " cr)."); }
   }
   return { score: Math.max(0, score), feasible, notes };
 }
@@ -375,11 +522,17 @@ function currentConfig() {
 }
 
 function resourcesOf(cfg) {
+  const ct = compTotals();
   return {
-    masa: cfg.orbita ? cfg.orbita.masa : 0,
-    potencia: cfg.orbita ? cfg.orbita.potencia : 0,
-    presupuesto: (cfg.orbita ? cfg.orbita.presupuesto : 0) + (cfg.lanzador ? cfg.lanzador.costo : 0),
-    datos: (cfg.orbita ? cfg.orbita.datos : 0) + (cfg.objetivo ? cfg.objetivo.datos : 0)
+    masa: (cfg.orbita ? cfg.orbita.masa : 0) + ct.masa,
+    // Potencia neta: lo que consume la mision menos lo que genera el
+    // sistema de potencia (negativo = sobra energia).
+    potencia: (cfg.orbita ? cfg.orbita.potencia : 0) + ct.potencia,
+    presupuesto: (cfg.orbita ? cfg.orbita.presupuesto : 0) + (cfg.lanzador ? cfg.lanzador.costo : 0) + ct.presupuesto,
+    datos: (cfg.orbita ? cfg.orbita.datos : 0) + (cfg.objetivo ? cfg.objetivo.datos : 0) + ct.datos,
+    // Combustible: capacidad del tanque y gasto total de la mision.
+    combustible: ct.combustible,
+    combustibleNecesario: ct.consumo * missionDays
   };
 }
 
@@ -389,7 +542,8 @@ function saveSel() {
     const result = computeMissionScore(cfg);
     localStorage.setItem(STORE_KEY, JSON.stringify({
       objetivo: sel.objetivo, orbita: sel.orbita, lanzador: sel.lanzador,
-      score: result.score, recursos: resourcesOf(cfg)
+      score: result.score, recursos: resourcesOf(cfg),
+      components: Object.assign({}, comp)
     }));
   } catch (e) { /* modo privado */ }
 }
@@ -424,12 +578,34 @@ BUTTONS.forEach(b => {
 
 // START MISSION: arranca el reloj de la mision en el backend (dia 1 de N)
 // y luego navega al mapa. Si no hay backend, se navega igual.
+// (v13) Sin mision elegida NO se inicia: se avisa y se abre la lista de
+// misiones. El fit_score de diseno viaja en el payload para el score final.
+function showToast(msg) {
+  const el = document.getElementById("toast");
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove("show"), 3200);
+}
 function startMission(url) {
+  if (!sel.objetivo) {
+    showToast(t("pickMissionFirst"));
+    location.hash = "objectives";
+    return;
+  }
   // Marcar sesion iniciada SOLO al lanzar la mision desde el menu.
   sessionStorage.setItem("xonidu-started", "1");
+  try { saveSel(); } catch (e) {}
+  let fitScore = 0;
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    if (saved && typeof saved.score === "number") fitScore = saved.score;
+  } catch (e) {}
   const payload = {
     objetivo: sel.objetivo, orbita: sel.orbita, lanzador: sel.lanzador,
-    difficulty: difficulty, days: missionDays,
+    difficulty: difficulty, days: missionDays, fit_score: fitScore,
+    components: Object.assign({}, comp),
     min_per_day: DIFFICULTY_PRESETS[difficulty].min_per_day
   };
   try {
@@ -452,9 +628,10 @@ function renderDifficulty() {
     const failsKey = key === "facil" ? "difficultyFailsFew" : key === "medio" ? "difficultyFailsNormal" : "difficultyFailsMany";
     const failsCls = key === "facil" ? "easy" : key === "medio" ? "medium" : "hard";
     const nameKey = key === "facil" ? "difficultyEasy" : key === "medio" ? "difficultyMedium" : "difficultyHard";
+    const defaultsTxt = key === "facil" ? "🧩 nave ya diseñada (6/6 sistemas)" : key === "medio" ? "🧩 3/6 sistemas listos" : "🧩 tú diseñas la nave (0/6)";
     html += '<button type="button" class="diff-opt' + (key === difficulty ? " sel" : "") + '" data-id="' + key + '">'
       + '<span class="diff-name">' + t(nameKey) + (key === difficulty ? " · " + t("difficultyCurrent") : "") + '</span>'
-      + '<span class="diff-line">' + p.days + " " + t("difficultyDays") + " · " + p.min_per_day + " " + t("difficultyMinPerDay")
+      + '<span class="diff-line">' + defaultsTxt + " · " + p.days + " " + t("difficultyDays") + " · " + p.min_per_day + " " + t("difficultyMinPerDay")
       + " · " + t("difficultyKp") + " " + p.kp_warn + "/" + p.kp_crit
       + " · " + t("difficultyCme") + " " + p.cme_speed_warn + " km/s"
       + " · " + t("difficultyFlr") + " " + p.flr_min_class + "+"
@@ -474,9 +651,15 @@ function applyDifficulty(key) {
   difficulty = key;
   const p = DIFFICULTY_PRESETS[key];
   missionDays = p.days;
+  // v15: la dificultad trae sus componentes por defecto (facil = todos,
+  // medio = 3, dificil = ninguno). Se reemplaza el diseno actual.
+  comp = Object.assign({}, DIFFICULTY_DEFAULT_COMPONENTS[key] || {});
   try {
     localStorage.setItem(DIFFICULTY_KEY, difficulty);
     localStorage.setItem(MISSION_DAYS_KEY, String(missionDays));
+    localStorage.setItem(COMPONENTS_KEY, JSON.stringify(comp));
+    saveSel();
+    syncHud();
   } catch (e) {}
   // Aplica los umbrales al backend (los guarda en game_config.json).
   fetch("/api/difficulty", { method: "POST",
@@ -548,9 +731,10 @@ function optionList(title, sub, options, currentId, onPick, extraHtml) {
   const cfg = currentConfig();
   const result = computeMissionScore(cfg);
   const res = resourcesOf(cfg);
-  let summary = 'SCORE: <b>' + result.score + "</b> &nbsp;·&nbsp; MASS: " + res.masa +
-    " t &nbsp;·&nbsp; POWER: " + res.potencia + " kW &nbsp;·&nbsp; BUDGET: " + res.presupuesto +
-    " cr &nbsp;·&nbsp; DATA: " + res.datos + " mb";
+  const ct = compTotals();
+  let summary = 'SCORE: <b>' + result.score + "</b> &nbsp;·&nbsp; MASS: " + res.masa.toFixed(1) +
+    " t &nbsp;·&nbsp; POWER: " + res.potencia.toFixed(1) + " kW &nbsp;·&nbsp; BUDGET: " + res.presupuesto +
+    " cr &nbsp;·&nbsp; DATA: " + res.datos + " mb &nbsp;·&nbsp; FUEL: " + ct.combustible + " kg";
   if (typeof missionDays === "number") {
     summary += ' &nbsp;·&nbsp; <b>' + t("summaryDuration") + ': ' + missionDays + ' ' + t("objectivesDays") + '</b>';
   }
@@ -641,6 +825,45 @@ const METRICS_HTML_EN = `
 
 function metricsHtml() { return LANG === "en" ? METRICS_HTML_EN : METRICS_HTML_ES; }
 
+/* ============ COMPONENTES: disenar la nave (v14) ============ */
+// Panel HTML (no toca la imagen): 6 sistemas, 1 opcion por sistema.
+// Al elegir se guarda en localStorage y se actualiza el HUD / scoring.
+function renderComponents() {
+  ensureStyles();
+  $("#dTitle").textContent = t("componentsTitle");
+  const box = $("#dText");
+  let html = '<p class="ms-sub">' + t("componentsSub") + "</p>";
+  COMPONENT_SYSTEMS.forEach(sys => {
+    const cur = comp[sys.key] || null;
+    html += '<h3 class="ms-h">' + sys.name + "</h3>";
+    sys.options.forEach(o => {
+      const isCur = cur === o.id;
+      html += '<button type="button" class="ms-opt' + (isCur ? " sel" : "") + '" data-sys="' + sys.key + '" data-id="' + o.id + '">'
+        + "<b>" + o.id + (isCur ? " · " + t("componentsCurrent") : "") + "</b>"
+        + "<span>" + o.desc + "</span>"
+        + '<span class="diff-line">MASS ' + o.masa + " t · POWER " + (o.potencia > 0 ? "+" : "") + o.potencia + " kW · BUDGET " + o.presupuesto + " cr · DATA " + o.datos + " mb"
+        + (o.combustible ? " · FUEL " + o.combustible + " kg (" + o.consumo + " kg/día)" : "")
+        + "</span></button>";
+    });
+  });
+  const ct = compTotals();
+  const res = resourcesOf(currentConfig());
+  html += '<div class="ms-summary"><b>' + t("componentsSummary") + ":</b> MASS " + res.masa.toFixed(1) + " t · POWER " + (res.potencia > 0 ? "+" : "") + res.potencia.toFixed(1) + " kW · BUDGET " + res.presupuesto + " cr · DATA " + res.datos + " mb · FUEL " + ct.combustible + " kg (" + t("componentsFuelNeed") + " " + ct.consumo * missionDays + " kg en " + missionDays + " días)</div>";
+  html += '<p class="ms-sub" id="compMsg"></p>';
+  box.innerHTML = html;
+  box.querySelectorAll(".ms-opt").forEach(btn => {
+    btn.addEventListener("click", () => {
+      comp[btn.dataset.sys] = btn.dataset.id;
+      try { localStorage.setItem(COMPONENTS_KEY, JSON.stringify(comp)); } catch (e) {}
+      try { saveSel(); } catch (e) {}
+      syncHud();
+      renderComponents();
+      const msg = $("#compMsg");
+      if (msg) msg.textContent = t("componentsSaved");
+    });
+  });
+}
+
 /* ============ PANEL METRICS: ver y configurar ============ */
 // El panel muestra: (1) datos NASA en vivo ahora mismo, (2) las metricas,
 // algoritmos y ecuaciones del equipo, (3) el formulario para CONFIGURAR
@@ -698,6 +921,22 @@ function renderMetrics() {
     });
   });
   $("#ms-save").addEventListener("click", saveConfig);
+  // v14: los componentes elegidos y sus totales, dentro de Metricas.
+  const ct = compTotals();
+  const res = resourcesOf(currentConfig());
+  const compHtml = '<h3 class="ms-h">Componentes de la nave</h3>'
+    + '<p class="ms-sub">Lo que elegiste en el panel Componentes (botón 🧩 arriba a la derecha). Cada sistema suma a los recursos y al scoring: instrumento clave +20, sin potencia o sin combustible el diseño no es viable.</p>'
+    + COMPONENT_SYSTEMS.map(sys => {
+        const o = compOption(sys.key);
+        return "<p><strong>" + sys.name + ":</strong> " + (o ? o.id + " (MASS " + o.masa + " t · POWER " + o.potencia + " kW · BUDGET " + o.presupuesto + " cr · DATA " + o.datos + " mb" + (o.combustible ? " · FUEL " + o.combustible + " kg" : "") + ")" : "sin elegir") + "</p>";
+      }).join("")
+    + '<p><strong>Totales del diseño:</strong> MASS ' + res.masa.toFixed(1) + " t · POWER " + res.potencia.toFixed(1) + " kW · BUDGET " + res.presupuesto + " cr · DATA " + res.datos + " mb · FUEL " + ct.combustible + " kg (necesita " + ct.consumo * missionDays + " kg en " + missionDays + " días)</p>";
+  const msConfig = $("#ms-config");
+  if (msConfig) {
+    const div = document.createElement("div");
+    div.innerHTML = compHtml;
+    msConfig.parentNode.insertBefore(div, msConfig);
+  }
   fetchLiveData();
 }
 
@@ -715,7 +954,9 @@ function saveConfig() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(next)
   }).then(r => r.ok ? r.json() : null).then(d => {
-    msg.textContent = d && d.ok ? t("msgSavedBackend") : t("msgSavedLocal");
+    const ok = !!(d && d.ok);
+    msg.textContent = ok ? t("msgSavedBackend") : t("msgSavedLocal");
+    if (ok) { showToast(t("msgSavedBackend")); renderMetrics(); }
     syncHud();
   }).catch(() => { msg.textContent = t("msgSavedLocal"); syncHud(); });
 }
@@ -757,9 +998,11 @@ function route() {
   const b = BUTTONS.find(b => b.id === id && !b.url);
   const isMetrics = id === "metrics";
   const isDifficulty = id === "difficulty";
-  $("#detail").hidden = !b && !isMetrics && !isDifficulty;
+  const isComponents = id === "components";
+  $("#detail").hidden = !b && !isMetrics && !isDifficulty && !isComponents;
   if (isMetrics) { renderMetrics(); return; }
   if (isDifficulty) { renderDifficulty(); return; }
+  if (isComponents) { renderComponents(); return; }
   if (!b) return;
   if (b.id === "objectives") {
     const extra = '<div class="slider-row"><label><span>' + t("objectivesDuration") + '</span> <span id="objDurVal">' + missionDays + '</span> <span class="slider-unit">' + t("objectivesDays") + '</span></label><input type="range" id="objDurSlider" min="1" max="30" value="' + missionDays + '"></div>';
@@ -779,6 +1022,16 @@ $("#backBtn").addEventListener("click", () => { location.hash = ""; });
 // configuracion. Son la UNICA parte editable del juego final.
 $("#metricsTopBtn").addEventListener("click", () => { location.hash = "metrics"; });
 $("#diffTopBtn").addEventListener("click", () => { location.hash = "difficulty"; });
+$("#compTopBtn").addEventListener("click", () => { location.hash = "components"; });
+// v15: forzar un poll manual de las APIs de la NASA (util en la demo:
+// el jugador no tiene que esperar al poll automatico de 60 s).
+$("#refreshTopBtn").addEventListener("click", () => {
+  showToast(t("refreshPolling"));
+  fetch("/api/nasa/poll", { method: "POST" })
+    .then(r => r.ok ? r.json() : null)
+    .then(d => { showToast(d && d.ok ? t("refreshOk") : t("refreshFail")); })
+    .catch(() => { showToast(t("refreshFail")); });
+});
 document.addEventListener("keydown", e => { if (e.key === "Escape") location.hash = ""; });
 
 /* ============ BOTÓN IDIOMA ============ */

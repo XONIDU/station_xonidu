@@ -94,7 +94,7 @@ STATE = {
     },
 }
 
-VALID_STATUSES = {"ok", "warn", "crit"}
+VALID_STATUSES = {"ok", "warn", "crit", "pre"}
 
 # ---------------------------------------------------------------------------
 # Configuracion del juego (metricas, algoritmos, ecuaciones)
@@ -121,6 +121,11 @@ DEFAULT_GAME_CONFIG = {
     "mass_penalty": -20, "budget_penalty": -10,
     "complete_bonus": 200, "complete_bonus_hard": 300,
     "data_bonus": 40,
+    # v16: nuevos fallos reales (DSN, viento solar, campo magnetico, CME rapida).
+    "dsn_min_active": 1,      # una estacion con 0 antenas activas -> comms warn
+    "wind_speed_warn": 600,   # viento solar > 600 km/s -> comms warn
+    "mag_bt_warn": 10,        # campo magnetico Bt > 10 nT -> radiacion warn
+    "cme_fast_speed": 600,    # CME > 600 km/s -> ademas radiacion + comms warn
 }
 GAME_CONFIG = dict(DEFAULT_GAME_CONFIG)
 CONFIG_PATH = Path(__file__).resolve().parent / "game_config.json"
@@ -159,7 +164,63 @@ def apply_difficulty(name):
 # ---------------------------------------------------------------------------
 MISSION = {"active": False, "start": None, "difficulty": "medio",
            "days": 5, "min_per_day": 2, "objetivo": None, "orbita": None,
-           "lanzador": None}
+           "lanzador": None, "fit_score": 0, "components": {},
+           "fuel_capacity": 0, "fuel_burn": 0}
+# Estadisticas de la partida para el score final (v13): reparaciones
+# completadas (el jugador atendio un modulo en warn/crit) y modulos que
+# llegaron a crit. Se reinician en cada POST /api/mission/start.
+MISSION_STATS = {"repairs": 0, "crits": 0, "penalties": 0}
+# Modulos reforzados (v15): un modulo reforzado tarda el DOBLE en escalar
+# de warn a crit (el jugador se preparo para la falla).
+REINFORCED = set()
+# Combustible por sistema de propulsion (v14, valores de juego, iguales
+# que en el menu): (capacidad del tanque en kg, gasto por dia en kg/dia).
+PROPULSION_FUEL = {"NONE": (0, 0), "CHEMICAL": (200, 10), "ELECTRIC": (50, 2)}
+# Misiones que generan DATA (bonus +40 al completar): 4, 5, 6 y 9.
+DATA_MISSIONS = {"CUBESAT DEPLOY", "MICROGRAVITY SCIENCE",
+                 "EARTH OBSERVATION", "ASTRONOMY"}
+
+
+def mission_score():
+    """Score de la mision (v13): desglose por decision y por fallas.
+    fit = puntaje de diseno (orbita + lanzador) que manda el menu;
+    complete = bonus al terminar (200, 300 en la mision 7);
+    repairs = +50 por cada modulo reparado; crits = -50 por cada modulo
+    que llego a crit; data = +40 si la mision genera DATA. El bonus de
+    completar y el de DATA solo cuentan cuando la mision termino."""
+    obj = (MISSION.get("objetivo") or "").upper()
+    finished = False
+    if MISSION["active"] and MISSION["start"]:
+        total = MISSION["days"] * MISSION["min_per_day"]
+        elapsed = (_utcnow() - MISSION["start"]).total_seconds() / 60.0
+        finished = (int(elapsed // MISSION["min_per_day"]) + 1) > MISSION["days"]
+    complete = 0
+    data = 0
+    if finished:
+        complete = 300 if obj == "MOON & MARS TECH" else 200
+        data = 40 if obj in DATA_MISSIONS else 0
+    fit = int(MISSION.get("fit_score") or 0)
+    repairs = 50 * int(MISSION_STATS.get("repairs", 0))
+    crits = -50 * int(MISSION_STATS.get("crits", 0))
+    # Penalizaciones (v15): -10 por cada opcion mal elegida en el
+    # diagnostico. Cuentan siempre, no solo al terminar.
+    penalties = -10 * int(MISSION_STATS.get("penalties", 0))
+    # Combustible (v14): si la mision necesitaba combustible y se agoto
+    # antes de terminar, -20. Solo cuenta cuando la mision termino.
+    fuel = 0
+    if finished:
+        cap = float(MISSION.get("fuel_capacity") or 0)
+        burn = float(MISSION.get("fuel_burn") or 0)
+        total_min = MISSION["days"] * MISSION["min_per_day"]
+        if burn > 0 and cap > 0 and cap - burn * (total_min / max(1, MISSION["min_per_day"])) <= 0:
+            fuel = -20
+    return {"fit": fit, "complete": complete, "repairs": repairs,
+            "crits": crits, "data": data, "fuel": fuel,
+            "penalties": penalties,
+            "total": fit + complete + repairs + crits + data + fuel + penalties,
+            "n_repairs": int(MISSION_STATS.get("repairs", 0)),
+            "n_crits": int(MISSION_STATS.get("crits", 0)),
+            "n_penalties": int(MISSION_STATS.get("penalties", 0))}
 
 
 def mission_status():
@@ -172,18 +233,30 @@ def mission_status():
                 "minutes_total": MISSION["days"] * MISSION["min_per_day"],
                 "minutes_left": MISSION["days"] * MISSION["min_per_day"],
                 "finished": False, "objetivo": MISSION["objetivo"],
-                "orbita": MISSION["orbita"], "lanzador": MISSION["lanzador"]}
+                "orbita": MISSION["orbita"], "lanzador": MISSION["lanzador"],
+                "score": mission_score()}
     total = MISSION["days"] * MISSION["min_per_day"]
     elapsed = (_utcnow() - MISSION["start"]).total_seconds() / 60.0
     day = int(elapsed // MISSION["min_per_day"]) + 1
     finished = day > MISSION["days"]
+    # Combustible restante (v14): se gasta con los dias de mision.
+    # (dias transcurridos = minutos / minutos por dia, sin tope: el
+    # combustible solo baja, nunca sube al cambiar de dia.)
+    cap = float(MISSION.get("fuel_capacity") or 0)
+    burn = float(MISSION.get("fuel_burn") or 0)
+    days_elapsed = elapsed / max(1, MISSION["min_per_day"])
+    fuel_remaining = max(0.0, cap - burn * days_elapsed)
     return {"active": True, "difficulty": MISSION["difficulty"],
             "day": min(day, MISSION["days"]), "days_total": MISSION["days"],
             "min_per_day": MISSION["min_per_day"],
             "minutes_elapsed": round(elapsed, 1), "minutes_total": total,
             "minutes_left": round(max(0.0, total - elapsed), 1),
             "finished": finished, "objetivo": MISSION["objetivo"],
-            "orbita": MISSION["orbita"], "lanzador": MISSION["lanzador"]}
+            "orbita": MISSION["orbita"], "lanzador": MISSION["lanzador"],
+            "fuel": {"capacity": cap, "burn_per_day": burn,
+                     "remaining": round(fuel_remaining, 1),
+                     "needed": burn * MISSION["days"]},
+            "score": mission_score()}
 
 
 def load_game_config():
@@ -237,10 +310,18 @@ def _set_module_state(zona, slug, nivel):
         return False
     mods[slug] = nivel
     key = f"{zona}.{slug}"
+    if nivel == "crit" and cur != "crit":
+        # Un modulo que llega a crit resta en el score final.
+        try:
+            MISSION_STATS["crits"] = int(MISSION_STATS.get("crits", 0)) + 1
+        except Exception:
+            pass
     if nivel == "warn":
         WARN_SINCE.setdefault(key, _utcnow())
     elif nivel == "ok":
         WARN_SINCE.pop(key, None)
+        # Al reparar, el refuerzo se gasta (hay que volver a reforzar).
+        REINFORCED.discard(key)
     return True
 
 
@@ -262,17 +343,20 @@ def _is_fresh(ts, hours):
 
 
 def _escalate_unattended():
-    """Un modulo en warn que nadie atiende (clic) en attend_window_min pasa a crit."""
+    """Un modulo en warn que nadie atiende en attend_window_min pasa a crit.
+    Si el modulo esta REFORZADO (v15), tarda el DOBLE: el jugador se preparo."""
     window = GAME_CONFIG.get("attend_window_min", 5)
     now = _utcnow()
     for zona, mods in STATE["modulos"].items():
         for slug, nivel in mods.items():
             if nivel != "warn":
                 continue
-            since = WARN_SINCE.get(f"{zona}.{slug}")
-            if since and (now - since).total_seconds() >= window * 60:
+            key = f"{zona}.{slug}"
+            w = window * 2 if key in REINFORCED else window
+            since = WARN_SINCE.get(key)
+            if since and (now - since).total_seconds() >= w * 60:
                 _set_module_state(zona, slug, "crit")
-                print(f"[NASA] Escalado {zona}.{slug} warn -> crit (sin atender {window} min)")
+                print(f"[NASA] Escalado {zona}.{slug} warn -> crit (sin atender {w} min)")
 
 # ---------------------------------------------------------------------------
 # Proxy de APIs de la NASA (llave oculta, caché breve)
@@ -382,26 +466,31 @@ def nasa_dsn():
     try:
         import xml.etree.ElementTree as ET
         root = ET.fromstring(raw)
+        # v16 (BUG CORREGIDO): en el XML las <dish> son HERMANAS de las
+        # <station>, no hijas. Antes st.findall("dish") siempre devolvia
+        # vacio y dsn_dishes era 0. Ahora se agrupan por la estacion que
+        # las precede en el documento.
         stations = []
-        for st in root.findall("station"):
-            dishes = []
-            for dish in st.findall("dish"):
-                target = dish.find("target")
-                down = dish.find("downSignal")
-                dishes.append({
-                    "name": dish.get("name"),
-                    "activity": dish.get("activity"),
-                    "azimuth": dish.get("azimuthAngle"),
-                    "elevation": dish.get("elevationAngle"),
+        cur = None
+        for child in root:
+            if child.tag == "station":
+                cur = {"name": child.get("name"),
+                       "friendlyName": child.get("friendlyName"),
+                       "dishes": []}
+                stations.append(cur)
+            elif child.tag == "dish" and cur is not None:
+                target = child.find("target")
+                down = child.find("downSignal")
+                cur["dishes"].append({
+                    "name": child.get("name"),
+                    "activity": child.get("activity"),
+                    "azimuth": child.get("azimuthAngle"),
+                    "elevation": child.get("elevationAngle"),
                     "spacecraft": target.get("name") if target is not None else None,
                     "dataRate": down.get("dataRate") if down is not None else None,
                     "band": down.get("band") if down is not None else None,
+                    "down_active": down.get("active") if down is not None else None,
                 })
-            stations.append({
-                "name": st.get("name"),
-                "friendlyName": st.get("friendlyName"),
-                "dishes": dishes,
-            })
         return {"stations": stations}
     except Exception as e:
         print(f"[NASA] Error parseando DSN XML: {e}")
@@ -488,6 +577,15 @@ def nasa_live():
             sts = dsn_data.get("stations") or []
             out["dsn_stations"] = len(sts)
             out["dsn_dishes"] = sum(len(s.get("dishes") or []) for s in sts)
+            # v16: antenas con senal de bajada ACTIVA y estaciones caidas
+            # (0 antenas activas) — es lo que genera el fallo de comms.
+            out["dsn_active"] = sum(
+                1 for s in sts for d in (s.get("dishes") or [])
+                if d.get("down_active") == "true")
+            out["dsn_down_stations"] = sum(
+                1 for s in sts
+                if not any(d.get("down_active") == "true"
+                           for d in (s.get("dishes") or [])))
     except Exception:
         pass
     try:
@@ -589,6 +687,41 @@ def supabase_guardar_evento_nasa(api, tipo, severidad, fecha_evento, datos, modu
 # ---------------------------------------------------------------------------
 # Procesamiento de eventos NASA -> cambios de estado de modulos
 # ---------------------------------------------------------------------------
+def _aplicar_senales_tempranas(kp, cme_speed, flr_rank):
+    """Senal temprana (v15): un modulo en 'pre' avisa de que una falla se
+    acerca, ANTES de que ocurra. kp = ultimo Kp; cme_speed = CME mas rapido
+    (km/s); flr_rank = rango de la llamarada mas fuerte (B=0, C=1, M=2, X=3).
+    Un modulo 'pre' no necesita reparacion: es un aviso para prepararse
+    (reforzar) o vigilar los valores en vivo."""
+    pre = set()
+    cme_warn = float(GAME_CONFIG.get("cme_speed_warn", 350))
+    kp_warn = float(GAME_CONFIG.get("kp_warn", 5))
+    flr_min = str(GAME_CONFIG.get("flr_min_class", "M")).upper()
+    flr_min_rank = {"B": 0, "C": 1, "M": 2, "X": 3}.get(flr_min, 2)
+    # CME acercandose al umbral (70% o mas, sin cruzarlo).
+    if cme_speed and cme_speed >= cme_warn * 0.7 and cme_speed < cme_warn:
+        pre.add("c.energy")
+        pre.add("f.energy")
+    # Kp acercandose al umbral (a 1 punto o menos).
+    if kp and kp >= kp_warn - 1 and kp < kp_warn:
+        pre.add("a.radiation")
+        pre.add("f.radiation")
+    # Llamarada una clase por debajo del minimo (C cuando el minimo es M).
+    if flr_rank >= 0 and flr_rank == flr_min_rank - 1:
+        pre.add("a.radiation")
+        pre.add("f.radiation")
+        pre.add("d.comms")
+        pre.add("f.comms")
+    for zona, mods in STATE["modulos"].items():
+        for slug, nivel in mods.items():
+            key = f"{zona}.{slug}"
+            if key in pre and nivel == "ok":
+                _set_module_state(zona, slug, "pre")
+                print(f"[NASA] Senal temprana {key} (pre)")
+            elif key not in pre and nivel == "pre":
+                _set_module_state(zona, slug, "ok")
+
+
 def procesar_eventos_nasa():
     """Consulta las 5 APIs de la NASA, detecta eventos y actualiza estados.
 
@@ -606,6 +739,10 @@ def procesar_eventos_nasa():
     global KP_EPISODE
     resultados = {}
     fresh_hours = GAME_CONFIG.get("event_fresh_hours", 24)
+    # Valores para las senales tempranas (v15): se llenan abajo.
+    kp = 0.0
+    cme_max_speed = 0.0
+    flr_max_rank = -1  # B=0, C=1, M=2, X=3
 
     # --- SWPC K-index -> Radiacion (zonas A y F), condicion continua ---
     kp_data = nasa_kp()
@@ -642,16 +779,45 @@ def procesar_eventos_nasa():
         elif key not in ATTENDED and RANK[kp_level] > RANK.get(cur, 0):
             _set_module_state(zona, "radiation", kp_level)
 
-    # --- SWPC Alertas -> solo registro (no cambia estados por si solas) ---
+    # Eventos discretos vigentes en este poll (para retirar los caducados).
+    # Se define ANTES de las alertas porque el handler de alertas ya lo usa.
+    current_ids = set()
+
+    # --- SWPC Alertas -> fallos reales (v13) ---
+    # Antes solo se registraban en Supabase y no hacian nada, aunque son
+    # 70+ alertas reales. Ahora una alerta RECIENTE (dentro de
+    # event_fresh_hours) pone en warn sus modulos: el clima espacial
+    # degrada las comunicaciones y, si habla de electrones/protones o de
+    # tormenta geomagnetica, tambien la radiacion. Evento discreto: se
+    # aplica una vez por alerta (product_id + fecha de emision).
     alerts_data = nasa_alerts()
     if alerts_data and isinstance(alerts_data, list):
         resultados["alertas"] = len(alerts_data)
-        for al in alerts_data[-5:]:
+        # OJO: alerts.json viene ordenado de MAS RECIENTE a mas viejo
+        # (al reves que DONKI), asi que se toman los PRIMEROS 10, no los
+        # ultimos: con [-10:] solo se veian alertas viejas de octubre.
+        for al in alerts_data[:10]:
+            issue = al.get("issue_datetime", "")
             supabase_guardar_evento_nasa("alerts", "alerta_clima_espacial",
-                "media", al.get("issue_datetime", ""), al, ["mod-d-comms", "mod-f-comms"])
+                "media", issue, al, ["mod-d-comms", "mod-f-comms"])
+            if not _is_fresh(issue, fresh_hours):
+                continue
+            msg = str(al.get("message", "")).lower()
+            ev_id = "alert:" + str(al.get("product_id", "")) + ":" + str(issue)
+            current_ids.add(ev_id)
+            if ev_id in EVENT_STATE:
+                continue
+            mods = [("d", "comms"), ("f", "comms")]
+            if any(k in msg for k in ("electron", "proton", "geomagnetic", "storm")):
+                mods += [("a", "radiation"), ("f", "radiation")]
+            EVENT_STATE[ev_id] = {"modules": mods, "level": "warn"}
+            for zona, slug in mods:
+                ATTENDED.discard(f"{zona}.{slug}")
+                if STATE["modulos"].get(zona, {}).get(slug) in ("ok", "pre"):
+                    _set_module_state(zona, slug, "warn")
+            print(f"[NASA] Alerta SWPC ({al.get('product_id', '')}, {issue}) -> comms/radiacion warn")
 
     # --- Eventos discretos (FLR/CME): solo los recientes, aplicados una vez ---
-    current_ids = set()
     # Clase minima de llamarada que genera alerta: "M" (medio/facil) o "C"
     # (dificil: las llamaradas C son mucho mas frecuentes -> mas fallos).
     flr_min = str(GAME_CONFIG.get("flr_min_class", "M")).upper()
@@ -659,13 +825,23 @@ def procesar_eventos_nasa():
     if flr_data and isinstance(flr_data, list):
         for ev in flr_data[-10:]:
             clase = str(ev.get("classType", ""))
+            peak = ev.get("peakTime", "")
+            if not _is_fresh(peak, fresh_hours):
+                continue
+            # Rango de la llamarada para la senal temprana (v15): solo las
+            # FRESCAS cuentan (una llamarada vieja no es una amenaza).
+            if clase.startswith("B"):
+                flr_max_rank = max(flr_max_rank, 0)
+            elif clase.startswith("C"):
+                flr_max_rank = max(flr_max_rank, 1)
+            elif clase.startswith("M"):
+                flr_max_rank = max(flr_max_rank, 2)
+            elif clase.startswith("X"):
+                flr_max_rank = max(flr_max_rank, 3)
             if flr_min == "C":
                 if not (clase.startswith("C") or clase.startswith("M") or clase.startswith("X")):
                     continue
             elif not (clase.startswith("M") or clase.startswith("X")):
-                continue
-            peak = ev.get("peakTime", "")
-            if not _is_fresh(peak, fresh_hours):
                 continue
             ev_id = "flr:" + str(ev.get("flrID", peak))
             current_ids.add(ev_id)
@@ -677,7 +853,7 @@ def procesar_eventos_nasa():
             for zona, slug in mods:
                 # Evento nuevo: la atencion de un evento anterior ya no cuenta.
                 ATTENDED.discard(f"{zona}.{slug}")
-                if STATE["modulos"].get(zona, {}).get(slug) == "ok":
+                if STATE["modulos"].get(zona, {}).get(slug) in ("ok", "pre"):
                     _set_module_state(zona, slug, "warn")
             print(f"[NASA] Llamarada {clase} ({peak}) -> radiacion/comms warn")
             supabase_guardar_evento_nasa("flr", "llamarada_solar",
@@ -690,21 +866,32 @@ def procesar_eventos_nasa():
         for ev in cme_data[-10:]:
             analyses = ev.get("cmeAnalyses") or [{}]
             speed = float((analyses[0] or {}).get("speed", 0) or 0)
-            if speed <= GAME_CONFIG.get("cme_speed_warn", 500):
-                continue
             start = ev.get("startTime", "")
             if not _is_fresh(start, fresh_hours):
+                continue
+            # v15: registrar la CME mas rapida AUNQUE no cruce el umbral
+            # (la senal temprana PRE la necesita para avisar antes).
+            if speed > cme_max_speed:
+                cme_max_speed = speed
+            if speed <= GAME_CONFIG.get("cme_speed_warn", 500):
                 continue
             ev_id = "cme:" + str(ev.get("activityID", start))
             current_ids.add(ev_id)
             if ev_id in EVENT_STATE:
                 continue
             mods = [("c", "energy"), ("f", "energy")]
+            # v16: una CME MUY rapida (> cme_fast_speed) es un evento grande:
+            # ademas de la energia, trae radiacion (particulas) y afecta a
+            # las comunicaciones (apagon de radio). Hoy la CME de 624 km/s
+            # ya entra en este caso.
+            if speed > float(GAME_CONFIG.get("cme_fast_speed", 600)):
+                mods = mods + [("a", "radiation"), ("f", "radiation"),
+                               ("d", "comms"), ("f", "comms")]
             EVENT_STATE[ev_id] = {"modules": mods, "level": "warn"}
             for zona, slug in mods:
                 # Evento nuevo: la atencion de un evento anterior ya no cuenta.
                 ATTENDED.discard(f"{zona}.{slug}")
-                if STATE["modulos"].get(zona, {}).get(slug) == "ok":
+                if STATE["modulos"].get(zona, {}).get(slug) in ("ok", "pre"):
                     _set_module_state(zona, slug, "warn")
             print(f"[NASA] CME {speed} km/s ({start}) -> energia warn")
             supabase_guardar_evento_nasa("cme", "eyeccion_masa_coronal",
@@ -729,7 +916,11 @@ def procesar_eventos_nasa():
             if not still and STATE["modulos"].get(zona, {}).get(slug) == "warn":
                 _set_module_state(zona, slug, "ok")
 
-    # --- NeoWs -> solo registro (debris cercano, no cambia estados por si solo) ---
+    # --- NeoWs -> asteroides peligrosos (v13) ---
+    # Antes solo se registraba el conteo. Ahora, si en el feed de hoy hay
+    # un asteroide potencialmente peligroso, navegacion (D) y estructura
+    # (F) pasan a warn: hay debris real que esquivar. Evento discreto
+    # por fecha (una vez al dia).
     neo_data = nasa_neo()
     if neo_data:
         count = neo_data.get("element_count", 0) if isinstance(neo_data, dict) else 0
@@ -738,6 +929,102 @@ def procesar_eventos_nasa():
             "media" if count > 0 else "baja",
             _utcnow().isoformat() + "Z",
             {"count": count}, ["mod-d-navigation", "mod-f-structure"])
+        hazardous = []
+        try:
+            neos = neo_data.get("near_earth_objects", {}) if isinstance(neo_data, dict) else {}
+            for day, lst in (neos.items() if isinstance(neos, dict) else []):
+                for obj in (lst or []):
+                    if isinstance(obj, dict) and obj.get("is_potentially_hazardous_asteroid"):
+                        hazardous.append((day, obj.get("name", "?")))
+        except Exception:
+            hazardous = []
+        if hazardous:
+            day = hazardous[0][0]
+            ev_id = "neo:hazardous:" + str(day)
+            current_ids.add(ev_id)
+            if ev_id not in EVENT_STATE:
+                mods = [("d", "navigation"), ("f", "structure")]
+                EVENT_STATE[ev_id] = {"modules": mods, "level": "warn"}
+                for zona, slug in mods:
+                    ATTENDED.discard(f"{zona}.{slug}")
+                    if STATE["modulos"].get(zona, {}).get(slug) == "ok":
+                        _set_module_state(zona, slug, "warn")
+                print(f"[NASA] Asteroide peligroso {hazardous[0][1]} ({day}) -> navegacion/estructura warn")
+
+    # --- Senales tempranas (v15): la falla se puede PREVER ---
+    # Si un valor real se ACERCA al umbral pero aun no lo cruza, el modulo
+    # pasa a "pre" (amarillo suave): el jugador ve venir la falla y puede
+    # reforzar el modulo ANTES de que falle. Si el valor baja, vuelve a ok.
+    _aplicar_senales_tempranas(kp, cme_max_speed, flr_max_rank)
+
+    # --- Nuevos fallos reales (v16): DSN, viento solar, campo magnetico ---
+    # Son eventos discretos por dia: si la condicion se cumple hoy, el fallo
+    # se aplica; si deja de cumplirse, caduca y el modulo se recupera solo.
+    _today = _utcnow().strftime("%Y-%m-%d")
+    try:
+        dsn_data = nasa_dsn()
+        if dsn_data and isinstance(dsn_data, dict):
+            sts = dsn_data.get("stations") or []
+            active = sum(1 for s in sts for d in (s.get("dishes") or [])
+                         if d.get("down_active") == "true")
+            down_st = [s.get("friendlyName") or s.get("name") for s in sts
+                       if not any(d.get("down_active") == "true"
+                                  for d in (s.get("dishes") or []))]
+            if down_st or active <= 0:
+                ev_id = "dsn:down:" + _today
+                current_ids.add(ev_id)
+                if ev_id not in EVENT_STATE:
+                    mods = [("d", "comms"), ("f", "comms")]
+                    EVENT_STATE[ev_id] = {"modules": mods, "level": "warn"}
+                    for zona, slug in mods:
+                        ATTENDED.discard(f"{zona}.{slug}")
+                        if STATE["modulos"].get(zona, {}).get(slug) in ("ok", "pre"):
+                            _set_module_state(zona, slug, "warn")
+                    print(f"[NASA] DSN: estacion caida {down_st} (activas: {active}) -> comms warn")
+    except Exception as e:
+        print(f"[NASA] Error DSN: {e}")
+    # Viento solar rapido (> wind_speed_warn) -> comms (degrada la radio).
+    try:
+        wind = nasa_wind()
+        if wind and isinstance(wind, list):
+            act = [x for x in wind if x.get("active")]
+            if act:
+                ws = float((act[-1] or {}).get("proton_speed") or 0)
+                resultados["solar_wind"] = ws
+                if ws > float(GAME_CONFIG.get("wind_speed_warn", 600)):
+                    ev_id = "wind:fast:" + _today
+                    current_ids.add(ev_id)
+                    if ev_id not in EVENT_STATE:
+                        mods = [("d", "comms"), ("f", "comms")]
+                        EVENT_STATE[ev_id] = {"modules": mods, "level": "warn"}
+                        for zona, slug in mods:
+                            ATTENDED.discard(f"{zona}.{slug}")
+                            if STATE["modulos"].get(zona, {}).get(slug) in ("ok", "pre"):
+                                _set_module_state(zona, slug, "warn")
+                        print(f"[NASA] Viento solar {ws} km/s -> comms warn")
+    except Exception as e:
+        print(f"[NASA] Error viento solar: {e}")
+    # Campo magnetico fuerte (Bt > mag_bt_warn) -> radiacion.
+    try:
+        mag = nasa_mag()
+        if mag and isinstance(mag, list):
+            act = [x for x in mag if x.get("active")]
+            if act:
+                bt = float((act[-1] or {}).get("bt") or 0)
+                resultados["mag_bt"] = bt
+                if bt > float(GAME_CONFIG.get("mag_bt_warn", 10)):
+                    ev_id = "mag:strong:" + _today
+                    current_ids.add(ev_id)
+                    if ev_id not in EVENT_STATE:
+                        mods = [("a", "radiation"), ("f", "radiation")]
+                        EVENT_STATE[ev_id] = {"modules": mods, "level": "warn"}
+                        for zona, slug in mods:
+                            ATTENDED.discard(f"{zona}.{slug}")
+                            if STATE["modulos"].get(zona, {}).get(slug) in ("ok", "pre"):
+                                _set_module_state(zona, slug, "warn")
+                        print(f"[NASA] Campo magnetico Bt {bt} nT -> radiacion warn")
+    except Exception as e:
+        print(f"[NASA] Error campo magnetico: {e}")
 
     # --- Escalado por no atender ---
     _escalate_unattended()
@@ -1009,11 +1296,23 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             min_per_day = int(data.get("min_per_day") or GAME_CONFIG.get("min_per_day", 2))
             days = max(1, min(30, days))
             min_per_day = max(1, min(60, min_per_day))
+            comps = data.get("components") or {}
+            if not isinstance(comps, dict):
+                comps = {}
+            prop_id = str(comps.get("propulsion") or "NONE").upper()
+            fuel_cap, fuel_burn = PROPULSION_FUEL.get(prop_id, (0, 0))
             MISSION.update({"active": True, "start": _utcnow(),
                             "difficulty": str(data.get("difficulty") or GAME_CONFIG.get("difficulty", "medio")),
                             "days": days, "min_per_day": min_per_day,
                             "objetivo": data.get("objetivo"), "orbita": data.get("orbita"),
-                            "lanzador": data.get("lanzador")})
+                            "lanzador": data.get("lanzador"),
+                            "fit_score": int(data.get("fit_score") or 0),
+                            "components": comps,
+                            "fuel_capacity": fuel_cap, "fuel_burn": fuel_burn})
+            MISSION_STATS["repairs"] = 0
+            MISSION_STATS["crits"] = 0
+            MISSION_STATS["penalties"] = 0
+            REINFORCED.clear()
             # Reiniciar la partida: limpiar el estado del juego para empezar
             # de cero (dia 1, modulos en ok). Los eventos NASA que sigan
             # activos se aplican DE INMEDIATO (en un hilo, para no bloquear
@@ -1040,6 +1339,41 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     pass
             threading.Thread(target=_aplicar_eventos_inicio, daemon=True).start()
             body = json.dumps({"ok": True, "mission": mission_status()}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if parsed == "/api/nasa/poll":
+            # Forzar un poll inmediato de las APIs de la NASA (v15: boton
+            # "Datos NASA" del menu; tambien existe en GET).
+            resultados = procesar_eventos_nasa()
+            body = json.dumps({"ok": True, "resultados": resultados}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if parsed == "/api/mission/penalty":
+            # Penalizacion por opcion mal elegida (v15): -10 por cada una.
+            # Es POST (lo llama la mini-web al fallar el diagnostico).
+            data = self._json_body()
+            pts = int(data.get("points") or 10)
+            if pts < 1:
+                pts = 10
+            if pts > 50:
+                pts = 50
+            try:
+                MISSION_STATS["penalties"] = int(MISSION_STATS.get("penalties", 0)) + 1
+            except Exception:
+                pass
+            body = json.dumps({"ok": True, "penalties": MISSION_STATS.get("penalties", 0),
+                               "points_lost": -10 * int(MISSION_STATS.get("penalties", 0)),
+                               "score": mission_score()}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -1124,8 +1458,15 @@ async def handle_ws_message(msg, sender):
             and modulo in STATE["modulos"][zona]
             and status in VALID_STATUSES
         ):
+            prev = STATE["modulos"][zona][modulo]
             _set_module_state(zona, modulo, status)
             key = f"{zona}.{modulo}"
+            if status == "ok" and prev in ("warn", "crit"):
+                # El jugador reparo el modulo: +50 en el score final.
+                try:
+                    MISSION_STATS["repairs"] = int(MISSION_STATS.get("repairs", 0)) + 1
+                except Exception:
+                    pass
             if status == "ok":
                 # El jugador atendio el modulo (clic): el poll no lo vuelve
                 # a subir mientras el evento/episodio vigente siga activo.
@@ -1133,6 +1474,14 @@ async def handle_ws_message(msg, sender):
             else:
                 ATTENDED.discard(key)
             print(f"[WS] Modulo {zona}.{modulo} -> {status}")
+            broadcast_state()
+    elif mtype == "reinforce":
+        # Reforzar un modulo (v15): tarda el DOBLE en escalar a crit.
+        zona = msg.get("zona", "").lower()
+        modulo = msg.get("modulo", "").lower()
+        if zona in STATE["modulos"] and modulo in STATE["modulos"][zona]:
+            REINFORCED.add(f"{zona}.{modulo}")
+            print(f"[WS] Modulo {zona}.{modulo} reforzado (doble tiempo)")
             broadcast_state()
     elif mtype == "get_state":
         await sender.send(json.dumps({"type": "state", "data": STATE}))

@@ -19,7 +19,7 @@ const MODULES = [
 const $ = (s) => document.querySelector(s);
 const stage = $("#stage"), svg = $("#shapes");
 const STATUS_TEXT = { ok:"OK", warn:"WARNING", crit:"CRITICAL" };
-const STATUS_SHORT = { ok:"OK", warn:"WARN", crit:"CRIT" };
+const STATUS_SHORT = { ok:"OK", pre:"PRE", warn:"WARN", crit:"CRIT" };
 const NS = "http://www.w3.org/2000/svg";
 let selected = null;
 

@@ -13,7 +13,7 @@
 // No hay simulaciones: todo lo que se ve es estado real o reglas del juego.
 
 (function () {
-  var LABEL = { ok: "Normal", warn: "Anomalía", crit: "Crítico" };
+  var LABEL = { ok: "Normal", pre: "Señal temprana", warn: "Anomalía", crit: "Crítico" };
   var RANK = { ok: 0, warn: 1, crit: 2 };
 
   function ensureStyles() {
@@ -49,6 +49,26 @@
       ".mod-repair.crit h2{color:#e74c3c}",
       ".repair-bar-wrap{height:8px;border-radius:4px;background:#1a2540;overflow:hidden;margin:8px 0}",
       ".repair-bar{height:100%;background:#2ecc71;transition:width .3s}",
+      ".diag-box{border:1px solid #f1c40f;border-radius:8px;padding:12px;margin:10px 0;background:rgba(241,196,15,.06)}",
+      ".diag-opt{display:block;width:100%;text-align:left;margin:6px 0;padding:10px 12px;border-radius:8px;border:1px solid #24324d;background:#1a2540;color:#e8eefc;cursor:pointer;font:inherit}",
+      ".diag-opt:hover{border-color:#00e5ff;background:#16414f}",
+      ".diag-wrong{color:#e74c3c;font-weight:700}",
+      ".diag-bad{border-color:#e74c3c !important;background:#3d0f0f !important;animation:diagPulseRed 0.8s infinite}",
+      "@keyframes diagPulseRed{0%,100%{box-shadow:0 0 0 0 rgba(231,76,60,.0)}50%{box-shadow:0 0 14px 3px rgba(231,76,60,.8)}}",
+      ".diag-good{border-color:#2ecc71 !important;background:#0f2e1a !important}",
+      ".flow-hint{background:#0e1a2e;border:1px solid #1e4a5a;border-radius:8px;padding:10px 12px;margin-bottom:12px;color:#cfe3ff}",
+      ".pre-box{background:#2e2208;border:1px solid #f5b041;border-radius:8px;padding:10px 12px;margin:10px 0;color:#ffe9b0}",
+      ".reinforce-btn{display:block;width:100%;text-align:left;margin:6px 0;padding:10px 12px;border-radius:8px;border:1px solid #f5b041;background:#2e2208;color:#ffe9b0;cursor:pointer;font:inherit}",
+      ".reinforce-btn:hover{border-color:#ffd166;background:#3d2f0a}",
+      ".reinforce-btn:disabled{opacity:.45;cursor:default}",
+      ".cal-box{background:#0e1a2e;border:1px solid #1e4a5a;border-radius:8px;padding:12px;margin:10px 0}",
+      ".cal-slider{width:100%;margin:10px 0}",
+      ".cal-target{color:#2ecc71;font-weight:700}",
+      ".cal-bad{color:#e74c3c;font-weight:700}",
+      ".seq-btn{display:inline-block;margin:4px;padding:10px 14px;border-radius:8px;border:1px solid #24324d;background:#1a2540;color:#e8eefc;cursor:pointer;font:inherit}",
+      ".seq-btn:hover{border-color:#00e5ff;background:#16414f}",
+      ".seq-btn.done{border-color:#2ecc71;background:#0f2e1a;color:#2ecc71}",
+      ".seq-btn.bad{border-color:#e74c3c !important;background:#3d0f0f !important;animation:diagPulseRed 0.8s infinite}",
       ".repair-steps{list-style:none;margin:10px 0 0;padding:0}",
       ".repair-steps li{margin:6px 0}",
       ".repair-step{display:block;width:100%;text-align:left;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:#16213a;color:#e8eefc;font:inherit;cursor:pointer}",
@@ -118,6 +138,90 @@
   };
   var REPAIR_CRIT_EXTRA = "Confirmar la contención de la anomalía";
   var REPAIR_GENERIC = ["Aislar el módulo", "Reiniciar el sistema", "Verificar el estado"];
+  // ---- Diagnostico de la causa (v13) ----
+  // Antes de reparar hay que PENSAR: que causo la falla? Las 3 opciones
+  // son plausibles para ese modulo; la correcta se deduce de los valores
+  // en vivo de la NASA (liveCache) que se muestran en la seccion de
+  // "Valores en vivo". Si el jugador se equivoca, se le dice que revise
+  // los valores y puede reintentarlo. Sin diagnostico no hay reparacion.
+  // v16: calibracion (slider) — cada modulo tiene un parametro real
+  // que hay que ajustar a su zona verde. No es un clic: hay que MOVER
+  // el slider y aplicar. Valores de la ISS real (orden de magnitud).
+  var CALIBRATE = {
+    energy:     { param: "Tensión del bus", unit: "V", min: 0, max: 50, lo: 27, hi: 29 },
+    eclss:      { param: "Presión de O2", unit: "kPa", min: 0, max: 200, lo: 98, hi: 104 },
+    thermal:    { param: "Flujo de refrigerante", unit: "%", min: 0, max: 100, lo: 45, hi: 55 },
+    comms:      { param: "Potencia de transmisión", unit: "W", min: 0, max: 40, lo: 18, hi: 22 },
+    command:    { param: "Carga del procesador", unit: "%", min: 0, max: 100, lo: 30, hi: 60 },
+    navigation: { param: "Precisión de posición", unit: "m", min: 0, max: 100, lo: 0, hi: 10 },
+    robotics:   { param: "Par del brazo", unit: "N·m", min: 0, max: 200, lo: 80, hi: 120 },
+    "robotics-eva": { param: "Presión del traje", unit: "kPa", min: 0, max: 60, lo: 28, hi: 32 },
+    structure:  { param: "Tensión estructural", unit: "%", min: 0, max: 100, lo: 40, hi: 60 },
+    fire:       { param: "Concentración de O2", unit: "%", min: 0, max: 40, lo: 19, hi: 23 },
+    radiation:  { param: "Dosis acumulada", unit: "mSv/día", min: 0, max: 10, lo: 0, hi: 1 },
+    health:     { param: "Frecuencia cardíaca", unit: "lpm", min: 0, max: 180, lo: 60, hi: 100 },
+    habitability: { param: "Humedad de la cabina", unit: "%", min: 0, max: 100, lo: 40, hi: 60 },
+    food:       { param: "Temperatura del cultivo", unit: "°C", min: 0, max: 40, lo: 20, hi: 25 },
+    science:    { param: "Enfoque del instrumento", unit: "%", min: 0, max: 100, lo: 90, hi: 100 },
+    propulsion: { param: "Presión del tanque", unit: "bar", min: 0, max: 300, lo: 180, hi: 220 }
+  };
+  // v16: secuencia (orden correcto) — el ultimo paso de una falla critica
+  // es ordenar 3 acciones en su orden logico. Si te equivocas, se reinicia.
+  var SEQUENCE = {
+    energy:     ["Aislar el circuito", "Reiniciar el inversor", "Verificar la tensión"],
+    eclss:      ["Cerrar la válvula", "Purgar la línea", "Restablecer el flujo"],
+    thermal:    ["Cerrar el bypass", "Reiniciar la bomba", "Verificar la temperatura"],
+    comms:      ["Cambiar de banda", "Realinear la antena", "Verificar la señal"],
+    command:    ["Reiniciar el módulo", "Sincronizar el reloj", "Verificar los datos"],
+    navigation: ["Recalibrar el GPS", "Actualizar la efeméride", "Verificar la posición"],
+    robotics:   ["Frenar el brazo", "Recalibrar los ejes", "Verificar el par"],
+    "robotics-eva": ["Cerrar la escotilla", "Presurizar el traje", "Verificar el sello"],
+    structure:  ["Asegurar el panel", "Apretar los pernos", "Verificar la tensión"],
+    fire:       ["Cerrar la compuerta", "Activar el extintor", "Ventilar la zona"],
+    radiation:  ["Cerrar el escudo", "Verificar el dosímetro", "Registrar la dosis"],
+    health:     ["Estabilizar al tripulante", "Revisar los signos", "Registrar el parte"],
+    habitability: ["Ajustar la ventilación", "Verificar la humedad", "Registrar el ambiente"],
+    food:       ["Ajustar el riego", "Verificar la temperatura", "Registrar el cultivo"],
+    science:    ["Recalibrar el instrumento", "Enfocar de nuevo", "Verificar los datos"],
+    propulsion: ["Cerrar la válvula", "Purgar la línea", "Verificar la presión"]
+  };
+  var seqOrder = {};     // modulo -> orden barajado de los 3 botones
+  var seqProgress = {};  // modulo -> cuantos aciertos seguidos lleva
+  var seqWrong = {};     // modulo -> ultimo intento mal (brilla en rojo)
+  var calVal = {};       // modulo -> valor actual del slider
+  var calBad = {};       // modulo -> ultimo intento fuera de rango
+
+  var DIAGNOSE = {
+    "energy": { options: ["Eyección de masa coronal (CME)", "Llamarada solar", "Fallo del inversor"], cause: function (d) { return (d && d.cme_speed != null && d.cme_speed > 300) ? 0 : 2; } },
+    "radiation": { options: ["Tormenta geomagnética (Kp alto)", "Llamarada solar", "Fallo del dosímetro"], cause: function (d) { if (d && d.kp != null && d.kp >= 5) return 0; if (d && d.flare && /^[MX]/.test(String(d.flare))) return 1; return 2; } },
+    "comms": { options: ["Llamarada solar", "Tormenta geomagnética", "Fallo de la antena"], cause: function (d) { if (d && d.flare && /^[MX]/.test(String(d.flare))) return 0; if (d && d.kp != null && d.kp >= 5) return 1; return 2; } },
+    "navigation": { options: ["Asteroide cercano / debris", "Tormenta solar", "Fallo del giroscopio"], cause: function (d) { if (d && d.neo_count != null && d.neo_count > 0) return 0; if (d && d.kp != null && d.kp >= 5) return 1; return 2; } },
+    "thermal": { options: ["Viento solar alto", "Fallo de la bomba de refrigerante", "Llamarada solar"], cause: function (d) { return (d && d.solar_wind != null && d.solar_wind > 400) ? 0 : 1; } },
+    "eclss": { options: ["Tormenta geomagnética", "Fuga de aire", "Fallo del filtro de CO2"], cause: function (d) { return (d && d.kp != null && d.kp >= 5) ? 0 : 1; } },
+    "command": { options: ["Tormenta geomagnética", "Fallo del controlador", "Pérdida de enlace DSN"], cause: function (d) { if (d && d.kp != null && d.kp >= 5) return 0; if (d && d.dsn_stations != null && d.dsn_stations === 0) return 2; return 1; } },
+    "robotics": { options: ["Asteroide cercano / debris", "Fallo del controlador", "Tormenta solar"], cause: function (d) { if (d && d.neo_count != null && d.neo_count > 0) return 0; if (d && d.kp != null && d.kp >= 5) return 2; return 1; } },
+    "robotics-eva": { options: ["Tormenta geomagnética (radiación)", "Fallo del traje EVA", "Fuga de aire"], cause: function (d) { return (d && d.kp != null && d.kp >= 5) ? 0 : 1; } },
+    "structure": { options: ["Asteroide cercano / debris", "Micrometeorito", "Fallo estructural"], cause: function (d) { return (d && d.neo_count != null && d.neo_count > 0) ? 0 : 1; } },
+    "science": { options: ["Tormenta solar", "Fallo del experimento", "Pérdida de enlace"], cause: function (d) { if (d && (d.kp != null && d.kp >= 5)) return 0; if (d && d.flare && /^[MX]/.test(String(d.flare))) return 0; return 1; } },
+    "propulsion": { options: ["Asteroide cercano / debris", "Fuga de propelente", "Fallo de la válvula"], cause: function (d) { return (d && d.neo_count != null && d.neo_count > 0) ? 0 : 1; } },
+    "fire": { options: ["Cortocircuito eléctrico", "Tormenta solar (CME)", "Fallo del detector"], cause: function (d) { return (d && d.cme_speed != null && d.cme_speed > 300) ? 1 : 0; } },
+    "health": { options: ["Tormenta geomagnética (radiación)", "Fallo del ECLSS", "Estrés de la tripulación"], cause: function (d) { return (d && d.kp != null && d.kp >= 5) ? 0 : 1; } },
+    "habitability": { options: ["Fuga de aire", "Tormenta geomagnética", "Fallo del sistema de agua"], cause: function (d) { return (d && d.kp != null && d.kp >= 5) ? 1 : 0; } },
+    "food": { options: ["Tormenta solar (radiación)", "Fallo de iluminación LED", "Falta de agua/nutrientes"], cause: function (d) { if (d && d.kp != null && d.kp >= 5) return 0; if (d && d.flare && /^[MX]/.test(String(d.flare))) return 0; return 1; } }
+  };
+  var DIAG_GENERIC = { options: ["Evento de clima espacial", "Fallo de hardware", "Error de software"], cause: function () { return 1; } };
+  var diagDone = {};
+  var diagWrongPick = {};   // modulo -> indice de la opcion mal elegida (brilla en rojo)
+  var diagCorrect = {};     // modulo -> el diagnostico fue correcto (brilla en verde)
+  var reinforceProgress = {}; // modulo -> {done, busy}
+  var reinforced = {};      // modulo -> ya reforzado
+  var diagWrong = {};
+  function diagnoseFor(id) {
+    var d = DIAGNOSE[slugOf(id)] || DIAG_GENERIC;
+    var idx = 0;
+    try { idx = d.cause(liveCache) || 0; } catch (e) { idx = 0; }
+    return { options: d.options, correct: idx };
+  }
   // Progreso persistente (sobrevive a los re-renders por cambio de estado):
   // id -> { done: pasos completados, busy: paso en curso (-1 si ninguno) }
   var repairProgress = {};
@@ -139,13 +243,114 @@
       else if (document.body) document.body.appendChild(box);
       if (!box._repairBound) {
         box._repairBound = true;
+        // v16: el slider (Ajustar) dispara "input" al arrastrar.
+        box.addEventListener("input", function (e) {
+          var sl = e.target && e.target.closest ? e.target.closest(".cal-slider") : null;
+          if (!sl) return;
+          var smod = sl.getAttribute("data-mod");
+          calVal[smod] = parseInt(sl.value, 10);
+          var lbl = document.getElementById("calVal-" + smod);
+          if (lbl) lbl.textContent = String(calVal[smod]);
+        });
         box.addEventListener("click", function (e) {
+          var dg = e.target && e.target.closest ? e.target.closest(".diag-opt") : null;
+          if (dg) {
+            var modId = dg.getAttribute("data-mod");
+            var pick = parseInt(dg.getAttribute("data-idx"), 10);
+            var d = diagnoseFor(modId);
+            if (pick === d.correct) {
+              diagDone[modId] = true;
+              diagCorrect[modId] = true;
+              delete diagWrong[modId];
+              delete diagWrongPick[modId];
+            } else {
+              diagWrong[modId] = true;
+              diagWrongPick[modId] = pick;
+              // v15: la opcion mal elegida brilla en rojo Y baja puntos.
+              try { if (window.stationStore && stationStore.addPenalty) stationStore.addPenalty(10); } catch (err) {}
+            }
+            repairSection(repairIds);
+            return;
+          }
+          var rf = e.target && e.target.closest ? e.target.closest(".reinforce-btn") : null;
+          if (rf && !rf.disabled) {
+            var rmod = rf.getAttribute("data-mod");
+            var rstep = parseInt(rf.getAttribute("data-step"), 10);
+            var rp = reinforceProgress[rmod];
+            if (!rp || rstep !== rp.done || rp.busy !== -1) return;
+            rp.busy = rstep;
+            repairSection(repairIds);
+            setTimeout(function () {
+              var p2 = reinforceProgress[rmod];
+              if (!p2) return;
+              p2.done += 1;
+              p2.busy = -1;
+              if (p2.done >= 2) {
+                delete reinforceProgress[rmod];
+                reinforced[rmod] = true;
+                try { if (window.stationStore && stationStore.reinforce) stationStore.reinforce(rmod); } catch (err) {}
+              }
+              repairSection(repairIds);
+            }, REPAIR_STEP_MS);
+            return;
+          }
+          // v16: el slider guarda su valor al moverlo (sin completar el paso).
+          var sl = e.target && e.target.closest ? e.target.closest(".cal-slider") : null;
+          if (sl) {
+            var smod = sl.getAttribute("data-mod");
+            calVal[smod] = parseInt(sl.value, 10);
+            var lbl = document.getElementById("calVal-" + smod);
+            if (lbl) lbl.textContent = String(calVal[smod]);
+            return;
+          }
+          // v16: secuencia — pulsar las 3 acciones en su orden logico.
+          var sq = e.target && e.target.closest ? e.target.closest(".seq-btn") : null;
+          if (sq) {
+            var qmod = sq.getAttribute("data-mod");
+            var qidx = parseInt(sq.getAttribute("data-seq"), 10);
+            var qprog = repairProgress[qmod];
+            if (!qprog) return;
+            var last = stepsFor(qmod).length - 1;
+            if (qprog.done !== last) return;
+            var cur = seqProgress[qmod] || 0;
+            if (qidx === cur) {
+              seqProgress[qmod] = cur + 1;
+              delete seqWrong[qmod];
+              if (seqProgress[qmod] >= 3) {
+                // Secuencia completa: es el ultimo paso, el modulo se repara.
+                delete repairProgress[qmod];
+                delete seqOrder[qmod];
+                delete seqProgress[qmod];
+                try { if (window.stationStore) stationStore.setModuleStatus(qmod, "ok"); } catch (err) {}
+              }
+            } else {
+              // Orden incorrecto: se reinicia y el boton brilla en rojo.
+              seqProgress[qmod] = 0;
+              seqWrong[qmod] = qidx;
+            }
+            repairSection(repairIds);
+            return;
+          }
           var b = e.target && e.target.closest ? e.target.closest(".repair-step") : null;
           if (!b || b.disabled) return;
           var modId = b.getAttribute("data-mod");
           var stepIdx = parseInt(b.getAttribute("data-step"), 10);
           var prog = repairProgress[modId];
           if (!prog || stepIdx !== prog.done || prog.busy !== -1) return;
+          // v16: el paso 0 es el slider — Aplicar solo si esta en la zona verde.
+          if (b.getAttribute("data-cal")) {
+            var cal = CALIBRATE[slugOf(modId)] || CALIBRATE.energy;
+            var v = (calVal[modId] !== undefined) ? calVal[modId] : Math.round((cal.min + cal.max) / 2);
+            if (v < cal.lo || v > cal.hi) {
+              calBad[modId] = true;
+              repairSection(repairIds);
+              return;
+            }
+            delete calBad[modId];
+            prog.done += 1;
+            repairSection(repairIds);
+            return;
+          }
           prog.busy = stepIdx;
           repairSection(repairIds);
           setTimeout(function () {
@@ -165,14 +370,56 @@
     }
     var html = "";
     var anyFail = false;
+    // v15: pista de flujo para que el juego sea intuitivo (se ve solo
+    // cuando hay algo que atender).
+    ids.forEach(function (id) {
+      if (getStatus(id) !== "ok") anyFail = true;
+    });
+    if (anyFail) {
+      html += '<div class="flow-hint">🧭 <b>Cómo jugar:</b> 1️⃣ Lee las señales y los valores en vivo · 2️⃣ <b>Diagnostica</b> la causa (si te equivocas, la opción brilla en rojo y pierdes 10 pts) · 3️⃣ <b>Repara</b>: ajusta el slider a la zona verde 🎚️, haz los pasos y, si es crítico, ordena la secuencia 🔢. Si el módulo solo está en <b>PRE</b>, aún no falló: puedes <b>reforzarlo</b> para ganar tiempo.</div>';
+    }
     ids.forEach(function (id) {
       var st = getStatus(id);
       var info = (window.XONIDU_MODULE_INFO || {})[id];
       var name = info ? info.name : id;
-      if (st === "ok") { delete repairProgress[id]; return; }
-      anyFail = true;
+      if (st === "ok") { delete repairProgress[id]; delete diagDone[id]; delete diagWrong[id]; delete diagWrongPick[id]; delete diagCorrect[id]; delete reinforceProgress[id]; delete reinforced[id]; delete seqOrder[id]; delete seqProgress[id]; delete seqWrong[id]; delete calVal[id]; delete calBad[id]; return; }
+      // v15: senal temprana (PRE) — la falla se ve venir, aun no ocurrio.
+      if (st === "pre") {
+        html += '<div class="mod-sec mod-repair pre"><h2>⚠ Señal temprana — ' + esc(name) + helpHTML("repair", id) + helpHTML("module", id) + '</h2>'
+          + '<div class="pre-box">' + preSignalFor(id) + '</div>'
+          + (reinforced[id]
+              ? '<p><b>🛡 Reforzado ✓</b> — si este módulo falla, tendrás el <b>doble de tiempo</b> para atenderlo antes de que pase a crítico.</p>'
+              : (function () {
+                  var rp = reinforceProgress[id] || (reinforceProgress[id] = { done: 0, busy: -1 });
+                  var steps = ["Cerrar válvulas de aislamiento", "Activar escudos y redundancia"];
+                  return '<p><b>🛡 Reforzar</b> (2 pasos, ~2 s): prepárate para la falla antes de que llegue.</p>'
+                    + steps.map(function (s, i) {
+                        var dis = (i !== rp.done || rp.busy !== -1) ? " disabled" : "";
+                        var lbl = (rp.busy === i) ? "⏳ " : (i < rp.done ? "✓ " : (i + 1) + ". ");
+                        return '<button type="button" class="reinforce-btn" data-mod="' + esc(id) + '" data-step="' + i + '"' + dis + '>' + lbl + esc(s) + "</button>";
+                      }).join("");
+                })())
+          + "</div>";
+        return;
+      }
+      if (!diagDone[id]) {
+        var dg = diagnoseFor(id);
+        html += '<div class="mod-sec mod-repair ' + st + '"><h2>🔍 Diagnóstico — ' + esc(name) + helpHTML("repair", id) + helpHTML("module", id) + '</h2>'
+          + '<p>Estado: <span class="mod-state ' + st + '">' + LABEL[st] + '</span> — antes de reparar hay que <b>pensar</b>: ¿qué causó esta falla? Lee los <b>valores en vivo</b> de la NASA (abajo) y elige. Sin el diagnóstico correcto no se desbloquea la reparación.</p>'
+          + (diagWrong[id] ? '<p class="diag-wrong">❌ Esa no es la causa — <b>−10 pts</b>. Revisa los valores en vivo (CME, Kp, llamarada, DSN, NeoWs) e inténtalo de nuevo.</p>' : "")
+          + dg.options.map(function (o, i) {
+              var cls = "diag-opt";
+              if (diagWrongPick[id] === i) cls += " diag-bad";
+              return '<button type="button" class="' + cls + '" data-mod="' + esc(id) + '" data-idx="' + i + '">' + (i + 1) + ". " + esc(o) + "</button>";
+            }).join("")
+          + "</div>";
+        return;
+      }
       var steps = stepsFor(id);
       var prog = repairProgress[id] || (repairProgress[id] = { done: 0, busy: -1 });
+      if (diagCorrect[id]) {
+        html += '<p class="diag-good">✓ Diagnóstico correcto — ahora repara paso a paso.</p>';
+      }
       if (prog.done > steps.length) prog.done = steps.length;
       var pct = Math.round((prog.done / steps.length) * 100);
       html += '<div class="mod-sec mod-repair ' + st + '"><h2>⚠ Reparación necesaria — ' + esc(name) + helpHTML("repair", id) + helpHTML("module", id) + '</h2>'
@@ -182,6 +429,40 @@
         + steps.map(function (s, i) {
             var done = i < prog.done;
             var busy = i === prog.busy;
+            // v16: el primer paso es AJUSTAR (slider, no un clic) y el
+            // ultimo paso de una falla critica es una SECUENCIA (ordenar).
+            if (i === 0) {
+              var cal = CALIBRATE[slugOf(id)] || CALIBRATE.energy;
+              var v = (calVal[id] !== undefined) ? calVal[id] : Math.round((cal.min + cal.max) / 2);
+              if (done) return '<li><button type="button" class="repair-step done" data-mod="' + esc(id) + '" data-step="0" disabled>1. 🎚️ Ajustar ' + esc(cal.param) + ' <span class="st">✓ Hecho</span></button></li>';
+              var bad = calBad[id] ? '<p class="cal-bad">❌ Fuera de rango — el valor debe estar entre ' + cal.lo + " y " + cal.hi + " " + esc(cal.unit) + ".</p>" : "";
+              return '<li><div class="cal-box"><b>🎚️ Paso 1 — Ajustar ' + esc(cal.param) + '</b>'
+                + '<p>Mueve el slider hasta la zona verde (' + cal.lo + "–" + cal.hi + " " + esc(cal.unit) + ") y pulsa Aplicar.</p>"
+                + '<input type="range" class="cal-slider" data-mod="' + esc(id) + '" min="' + cal.min + '" max="' + cal.max + '" step="1" value="' + v + '">'
+                + '<p>Valor actual: <b id="calVal-' + esc(id) + '">' + v + "</b> " + esc(cal.unit)
+                + ' · zona verde: <span class="cal-target">' + cal.lo + "–" + cal.hi + " " + esc(cal.unit) + "</span></p>"
+                + bad
+                + '<button type="button" class="repair-step" data-mod="' + esc(id) + '" data-step="0" data-cal="1">Aplicar ajuste</button></div></li>';
+            }
+            if (st === "crit" && i === steps.length - 1) {
+              var seq = SEQUENCE[slugOf(id)] || SEQUENCE.energy;
+              if (done) return '<li><button type="button" class="repair-step done" data-mod="' + esc(id) + '" data-step="' + i + '" disabled>' + (i + 1) + '. 🔢 Secuencia correcta <span class="st">✓ Hecho</span></button></li>';
+              if (!seqOrder[id]) {
+                // Barajar el orden de los 3 botones (una vez por modulo).
+                seqOrder[id] = [0, 1, 2].sort(function () { return Math.random() - 0.5; });
+              }
+              var order = seqOrder[id];
+              var progSeq = seqProgress[id] || 0;
+              var wrong = seqWrong[id];
+              return '<li><button type="button" class="repair-step" data-mod="' + esc(id) + '" data-step="' + i + '" disabled>' + (i + 1) + '. 🔢 Secuencia <span class="st">▶ Hacer</span></button><div class="cal-box"><b>🔢 Paso ' + (i + 1) + " — Ordena la secuencia</b>"
+                + '<p>Pulsa las 3 acciones en su <b>orden lógico</b> (la pista: ' + esc(seq[0]) + " → " + esc(seq[1]) + " → " + esc(seq[2]) + "). Si te equivocas, se reinicia.</p>"
+                + (wrong !== undefined ? '<p class="cal-bad">❌ Orden incorrecto — vuelve a empezar.</p>' : "")
+                + order.map(function (idx) {
+                    var cls = idx < progSeq ? " done" : (wrong === idx ? " bad" : "");
+                    return '<button type="button" class="seq-btn' + cls + '" data-mod="' + esc(id) + '" data-seq="' + idx + '">' + esc(seq[idx]) + "</button>";
+                  }).join("")
+                + "</div></li>";
+            }
             var dis = (!done && !busy && i === prog.done) ? "" : " disabled";
             var cls = done ? " done" : (busy ? " busy" : "");
             var mark = done ? "✓ Hecho" : (busy ? "… Trabajando" : (i === prog.done ? "▶ Hacer" : "—"));
@@ -415,6 +696,49 @@
     box.innerHTML = html;
   }
 
+  // v14: cada modulo muestra el componente que el jugador eligio para
+  // ese sistema (sin tocar las imagenes: es texto en la mini-web).
+  var MODULE_COMPONENT = {
+    "energy": "power", "comms": "comms", "thermal": "thermal",
+    "propulsion": "propulsion", "science": "instruments",
+    "navigation": "spacecraft", "robotics": "spacecraft",
+    "structure": "spacecraft", "command": "spacecraft"
+  };
+  var COMPONENT_LABEL = {
+    "spacecraft": "Nave espacial", "instruments": "Instrumentos científicos",
+    "power": "Sistema de potencia", "comms": "Comunicaciones",
+    "thermal": "Control térmico", "propulsion": "Propulsión"
+  };
+  function savedComponents() {
+    try {
+      var saved = JSON.parse(localStorage.getItem("xonidu-mission-v1") || "null");
+      return (saved && saved.components) || {};
+    } catch (e) { return {}; }
+  }
+  function componentLine(id) {
+    var sys = MODULE_COMPONENT[slugOf(id)];
+    if (!sys) return "";
+    var comps = savedComponents();
+    var chosen = comps[sys];
+    if (!chosen) return '<p class="muted">Tu diseño: aún no elegiste el sistema de ' + COMPONENT_LABEL[sys] + ' (menú → 🧩 Componentes).</p>';
+    return '<p><strong>Tu diseño — ' + COMPONENT_LABEL[sys] + ':</strong> ' + esc(chosen) + '</p>';
+  }
+
+  // v15: que senal temprana se esta viendo (desde los valores en vivo).
+  function preSignalFor(id) {
+    var d = (typeof liveCache !== "undefined" && liveCache) || null;
+    var slug = slugOf(id);
+    var parts = [];
+    if (d) {
+      if (d.cme_speed != null) parts.push("la velocidad del CME es <b>" + d.cme_speed + " km/s</b> y sigue subiendo");
+      if (d.kp != null) parts.push("el índice Kp es <b>" + d.kp + "</b> (tormenta geomagnética en camino)");
+      if (d.flare) parts.push("hay una llamarada <b>" + esc(d.flare) + "</b>");
+      if (d.neo_count) parts.push("hay <b>" + d.neo_count + "</b> asteroides cercanos hoy");
+    }
+    if (!parts.length) parts.push("los valores en vivo de la NASA están subiendo");
+    return "⚠ <b>Se acerca una anomalía</b> en este módulo: " + parts.join("; ") + ". Aún no falló — vigila los valores en vivo o refuérzalo ahora.";
+  }
+
   function metricsSection(moduleIds) {
     var box = document.getElementById("metricsBox");
     if (!box) return;
@@ -427,6 +751,7 @@
         + "<p>" + esc(info.blurb) + "</p>"
         + '<p>Estado en vivo: <span class="mod-state ' + st + '">' + LABEL[st] + "</span>"
         + ' <span class="muted">(ok = dentro de rango · warn = fuera de rango · crit = fuera de rango grave)</span></p>'
+        + componentLine(id)
         + info.metrics.map(function (mt) {
             return '<div class="mod-metric"><span class="m-name">' + esc(mt.name)
               + (mt.unit ? " (" + esc(mt.unit) + ")" : "") + '</span><span class="m-thr">warn <b>' + esc(mt.warn)

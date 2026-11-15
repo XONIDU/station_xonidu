@@ -70,6 +70,7 @@ button:hover{filter:brightness(1.15)}
   stroke-linejoin:round;cursor:pointer;transition:fill .2s;outline:none}
 .poly.ok{--c:var(--ok)}
 .poly.warn{--c:var(--warn);fill:rgba(var(--c),.36);animation:polypulseWarn 1.2s infinite}
+.poly.pre{--c:var(--warn);fill:rgba(var(--c),.18);animation:polypulseWarn 2.5s infinite}
 .poly.crit{--c:var(--crit);fill:rgba(var(--c),.42);animation:polypulseCrit .5s infinite}
 .poly:hover,.poly:focus-visible{fill:rgba(var(--c),.45)}
 .poly.sel{stroke:#fff;stroke-width:4}
@@ -80,6 +81,7 @@ button:hover{filter:brightness(1.15)}
   paint-order:stroke;stroke:rgba(5,8,16,.85);stroke-width:.5px}
 .poly-label.ok{fill:#2ecc71;opacity:.7}
 .poly-label.warn{fill:#f1c40f;animation:polypulseWarn 1.2s infinite}
+.poly-label.pre{fill:#f5b041;animation:polypulseWarn 2.5s infinite}
 .poly-label.crit{fill:#e74c3c;animation:polypulseCrit .5s infinite}
 .poly-label-name{font-size:1.6px;fill:#cfe3ff;opacity:.95}
 .poly-label-live{font-size:1.5px;fill:#7ff3ff;opacity:.95}

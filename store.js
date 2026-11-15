@@ -9,7 +9,7 @@
 */
 const STORE_KEY = "station-module-status-v1";
 const ALERT_KEY = "station-alert-v1";
-const STATUS_RANK = { ok: 0, warn: 1, crit: 2 };
+const STATUS_RANK = { ok: 0, pre: 1, warn: 2, crit: 3 };
 
 // Backend: si está disponible, se usa como fuente de verdad compartida.
 let BACKEND_URL = "http://localhost:5000";
@@ -384,9 +384,28 @@ window.addEventListener("storage", e => {
   } catch (err) {}
 });
 
+// v15: penalizacion por opcion mal (-10) y reforzar un modulo.
+function addPenalty(points) {
+  if (!USE_BACKEND) return Promise.resolve(null);
+  return fetch(BACKEND_URL + "/api/mission/penalty", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ points: points || 10 })
+  }).then(r => r.ok ? r.json() : null).catch(() => null);
+}
+function reinforceModule(moduleId) {
+  const parts = moduleId.split("-");
+  const zone = parts[1];
+  const slug = parts.slice(2).join("-");
+  if (ws && ws.readyState === 1) {
+    ws.send(JSON.stringify({ type: "reinforce", zona: zone, modulo: slug }));
+  }
+}
+
 window.stationStore = {
   getModuleStatus, setModuleStatus, getZoneStatus, setZoneStatus, getAnyAlertStatus, getZoneModules,
-  saveAlert, readAlert, fullId, allModules, setBackend, getModuleLiveLabel
+  saveAlert, readAlert, fullId, allModules, setBackend, getModuleLiveLabel,
+  addPenalty, reinforce: reinforceModule
 };
 // Funcion de depuracion global: window.setModuleStatus('mod-c-eclss', 'warn' | 'crit' | 'ok')
 window.setModuleStatus = setModuleStatus;

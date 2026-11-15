@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Station Map</title>
-  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="style.css?v=11">
   <script>
     // El juego empieza obligatoriamente en el menu. Si no hay sesion iniciada
     // o no hay una mision activa en el backend, se redirige al menu.
@@ -31,6 +31,7 @@
   <header class="bar">
     <h1>Station Map</h1>
     <span id="missionDay" class="mission-day" title="Día de la misión"></span>
+    <span id="missionClock" class="mission-day mission-clock" title="Tiempo que queda de este día (minutos:segundos)"></span>
     <div class="legend">
       <span><i class="dot ok"></i>Normal</span>
       <span><i class="dot warn"></i>Anomalía</span>
@@ -67,6 +68,19 @@
     </aside>
   </main>
 
+  <!-- Pantalla de fin de mision (v13): score con desglose -->
+  <section id="endScreen" class="end-screen" hidden>
+    <div class="end-card">
+      <h2 id="endTitle">Misión completada</h2>
+      <p id="endMission" class="muted"></p>
+      <div id="endScore" class="end-score"></div>
+      <div class="end-actions">
+        <button id="endMenuBtn" class="primary" type="button">☰ Volver al menú</button>
+        <button id="endRestartBtn" class="ghost" type="button">↺ Jugar otra vez</button>
+      </div>
+    </div>
+  </section>
+
   <section id="detail" class="detail" hidden>
     <div class="card">
       <button id="backBtn" class="ghost" type="button">← Volver al mapa</button>
@@ -76,7 +90,7 @@
     </div>
   </section>
 
-  <script src="../store.js?v=7"></script>
-  <script src="app.js?v=7"></script>
+  <script src="../store.js?v=11"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>

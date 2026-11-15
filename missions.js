@@ -10,7 +10,7 @@ window.XONIDU_MISSIONS = [
     id: "SATELLITE REPAIR",
     name: "Mantenimiento y reparación de satélites en órbita",
     desc: "Acercarse a un satélite, capturarlo con el brazo, acoplarse y repararlo o reabastecerlo.",
-    orbit: "LEO", launcher: ["FALCON 9"], bonus: 200, datos: 0,
+    orbits: ["LEO"], instrumento: null, needsPropulsion: true, launcher: ["FALCON 9"], bonus: 200, datos: 0,
     modules: ["mod-d-robotics", "mod-d-navigation", "mod-f-propulsion", "mod-f-structure", "mod-e-robotics-eva"],
     steps: [
       { text: "Acercamiento al satélite", modules: ["mod-d-navigation"] },
@@ -24,7 +24,7 @@ window.XONIDU_MISSIONS = [
     id: "CARGO CAPTURE",
     name: "Captura de naves de carga",
     desc: "Atrapar con el brazo una nave como Dragon o Cygnus y acoplarla a la estación.",
-    orbit: "LEO", launcher: ["FALCON 9"], bonus: 200, datos: 0,
+    orbits: ["LEO"], instrumento: null, needsPropulsion: true, launcher: ["FALCON 9"], bonus: 200, datos: 0,
     modules: ["mod-d-robotics", "mod-d-comms", "mod-e-structure", "mod-c-command"],
     steps: [
       { text: "Aproximación", modules: ["mod-d-comms", "mod-c-command"] },
@@ -38,7 +38,7 @@ window.XONIDU_MISSIONS = [
     id: "SPACEWALK (EVA)",
     name: "Salidas espaciales (EVA)",
     desc: "Los astronautas salen a reparar, instalar equipos o recoger muestras.",
-    orbit: "LEO", launcher: ["FALCON 9"], bonus: 200, datos: 0,
+    orbits: ["LEO"], instrumento: null, needsPropulsion: false, launcher: ["FALCON 9"], bonus: 200, datos: 0,
     modules: ["mod-e-robotics-eva", "mod-a-eclss", "mod-a-radiation", "mod-d-robotics"],
     steps: [
       { text: "Preparación: checklist y O2 de trajes", modules: ["mod-e-robotics-eva"] },
@@ -52,7 +52,7 @@ window.XONIDU_MISSIONS = [
     id: "CUBESAT DEPLOY",
     name: "Despliegue de CubeSats desde la esclusa",
     desc: "Diseñar, desplegar y seguir un satélite pequeño desde la estación.",
-    orbit: "LEO", launcher: ["FALCON 9"], bonus: 200, datos: 40,
+    orbits: ["LEO"], instrumento: "CAMERA", needsPropulsion: false, launcher: ["FALCON 9"], bonus: 200, datos: 40,
     modules: ["mod-e-structure", "mod-f-science", "mod-f-comms", "mod-d-navigation"],
     steps: [
       { text: "Diseño del CubeSat", modules: ["mod-f-science"] },
@@ -66,7 +66,7 @@ window.XONIDU_MISSIONS = [
     id: "MICROGRAVITY SCIENCE",
     name: "Experimentos científicos en microgravedad",
     desc: "Cultivos con Veggie y APH, y estudios de combustión con BASS y SAFFIRE.",
-    orbit: "LEO", launcher: ["FALCON 9"], bonus: 200, datos: 40,
+    orbits: ["LEO"], instrumento: "SPECTROMETER", needsPropulsion: false, launcher: ["FALCON 9"], bonus: 200, datos: 40,
     modules: ["mod-b-food", "mod-b-thermal", "mod-f-science", "mod-c-thermal"],
     steps: [
       { text: "Preparar experimento", modules: ["mod-b-food", "mod-b-thermal"] },
@@ -79,7 +79,7 @@ window.XONIDU_MISSIONS = [
     id: "EARTH OBSERVATION",
     name: "Observación de la Tierra y desastres naturales",
     desc: "Monitorear incendios, huracanes e inundaciones y enviar los datos a equipos en tierra.",
-    orbit: "LEO", launcher: ["FALCON 9"], bonus: 200, datos: 40,
+    orbits: ["LEO", "POLAR", "SUN-SYNCHRONOUS"], instrumento: "CAMERA", needsPropulsion: false, launcher: ["FALCON 9"], bonus: 200, datos: 40,
     modules: ["mod-f-science", "mod-f-comms", "mod-d-navigation", "mod-d-comms"],
     steps: [
       { text: "Apuntar", modules: ["mod-d-navigation"] },
@@ -93,7 +93,7 @@ window.XONIDU_MISSIONS = [
     id: "MOON & MARS TECH",
     name: "Pruebas de tecnología para la Luna y Marte",
     desc: "Probar en la estación todo lo que servirá en misiones futuras. Usa las 6 zonas.",
-    orbit: "LEO", orbitAlt: "HELIOCENTRIC", launcher: ["ATLAS V"], bonus: 300, datos: 0,
+    orbits: ["LEO", "HELIOCENTRIC"], instrumento: "SENSOR SUITE", needsPropulsion: false, launcher: ["ATLAS V"], bonus: 300, datos: 0,
     modules: "ALL",
     steps: [
       { text: "Instalar prototipo", modules: [] },
@@ -106,7 +106,7 @@ window.XONIDU_MISSIONS = [
     id: "SATELLITE LIFE EXTENSION",
     name: "Extensión de vida de satélites",
     desc: "Acoplarse a un satélite viejo para reabastecerlo de combustible o reemplazar componentes.",
-    orbit: "GEO", launcher: ["ATLAS V", "ARIANE 5"], bonus: 200, datos: 0,
+    orbits: ["GEO"], instrumento: null, needsPropulsion: true, launcher: ["ATLAS V", "ARIANE 5"], bonus: 200, datos: 0,
     modules: ["mod-f-propulsion", "mod-f-structure", "mod-d-navigation", "mod-d-robotics"],
     steps: [
       { text: "Acercamiento", modules: ["mod-d-navigation"] },
@@ -120,7 +120,7 @@ window.XONIDU_MISSIONS = [
     id: "ASTRONOMY",
     name: "Observación astronómica desde la estación",
     desc: "Aprovechar la posición en órbita para observar el espacio con menos interferencia atmosférica.",
-    orbit: "LEO", launcher: ["FALCON 9"], bonus: 200, datos: 40,
+    orbits: ["LEO"], instrumento: "TELESCOPE", needsPropulsion: false, launcher: ["FALCON 9"], bonus: 200, datos: 40,
     modules: ["mod-f-science", "mod-f-comms", "mod-a-radiation", "mod-d-navigation"],
     steps: [
       { text: "Apuntar", modules: ["mod-d-navigation"] },

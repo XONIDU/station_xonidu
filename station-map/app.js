@@ -240,32 +240,110 @@ window.addEventListener("resize", ajustarZonasImagen);
 
 /* ============ RELOJ DE MISIÓN (día X/5 en la cabecera) ============ */
 // La misión arranca con START MISSION en el menú (POST /api/mission/start).
-// Aquí solo se muestra: día actual, duración total y si ya terminó.
+// Aquí solo se muestra: día actual, horas/minutos y si ya terminó.
+// (v13) El reloj muestra horas y minutos (transcurrido y restante), no
+// solo el día, y se actualiza cada 5 s para que se vea correr. Al
+// terminar, se abre la pantalla de score con el desglose.
+function fmtHM(min) {
+  const total = Math.max(0, Math.round(min));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+}
+function showEndScreen(m) {
+  const sec = document.getElementById("endScreen");
+  if (!sec) return;
+  const s = m.score || {};
+  document.getElementById("endMission").textContent =
+    (m.objetivo || "Misión") + " · " + m.days_total + " días · " + m.difficulty;
+  const row = (label, val) =>
+    '<div class="row"><span>' + label + '</span><b>' + val + '</b></div>';
+  document.getElementById("endScore").innerHTML =
+    row("Diseño (órbita + lanzador)", (s.fit || 0) + " pts")
+    + row("Completar la misión", "+" + (s.complete || 0) + " pts")
+    + row("Reparaciones (" + (s.n_repairs || 0) + " × 50)", "+" + (s.repairs || 0) + " pts")
+    + row("Módulos en crítico (" + (s.n_crits || 0) + " × −50)", (s.crits || 0) + " pts")
+    + row("Datos científicos (DATA)", "+" + (s.data || 0) + " pts")
+    + row("Combustible (se agotó antes de terminar)", (s.fuel || 0) + " pts")
+    + '<div class="row total"><span>SCORE TOTAL</span><span>' + (s.total || 0) + " pts</span></div>";
+  const fuel = m.fuel || {};
+  if (fuel.capacity) {
+    document.getElementById("endMission").textContent += " · FUEL " + (fuel.remaining || 0) + "/" + fuel.capacity + " kg";
+  }
+  sec.hidden = false;
+}
+// v15: DOS marcadores de tiempo, como pidio Darian:
+// 1) Dias: "Día 1/5", "Día 2/5"... (en #missionDay).
+// 2) Cuenta atras del dia actual: "⏱ MM:SS" bajando cada segundo (en
+// #missionClock). El backend se consulta cada 5 s; entre consultas el
+// reloj baja en local (1 s) para que los segundos se vean correr.
+var _lastMission = null;
+var _lastFetchAt = 0;
+function fmtMS(totalSeconds) {
+  var s = Math.max(0, Math.floor(totalSeconds));
+  var mm = Math.floor(s / 60);
+  var ss = s % 60;
+  return (mm < 10 ? "0" : "") + mm + ":" + (ss < 10 ? "0" : "") + ss;
+}
+function renderClock() {
+  var el = document.getElementById("missionDay");
+  var clk = document.getElementById("missionClock");
+  if (!el || !clk || !_lastMission) return;
+  var m = _lastMission;
+  if (m.finished) {
+    el.textContent = "Misión completada · " + m.days_total + " días · " + fmtHM(m.minutes_total);
+    el.classList.add("finished");
+    clk.textContent = "";
+    clk.style.display = "none";
+    return;
+  }
+  // Minutos transcurridos ahora = lo que dijo el backend + lo que paso
+  // en local desde la ultima consulta.
+  var elapsedMin = (m.minutes_elapsed || 0) + (Date.now() - _lastFetchAt) / 60000;
+  var perDay = m.min_per_day || 1;
+  var dayElapsedMin = elapsedMin % perDay;
+  var dayLeftSec = Math.max(0, (perDay - dayElapsedMin) * 60);
+  var day = Math.min(m.days_total, Math.floor(elapsedMin / perDay) + 1);
+  el.textContent = "Día " + day + "/" + m.days_total;
+  el.classList.remove("finished");
+  clk.textContent = "⏱ " + fmtMS(dayLeftSec) + " · restan " + fmtHM(Math.max(0, (m.minutes_total || 0) - elapsedMin));
+  clk.style.display = "";
+}
 function syncMissionDay() {
   const el = document.getElementById("missionDay");
+  const clk = document.getElementById("missionClock");
   if (!el) return;
   fetch("/api/mission").then(r => r.ok ? r.json() : null).then(d => {
     const m = d && d.mission;
-    if (!m || !m.active) { el.textContent = ""; el.style.display = "none"; return; }
-    el.style.display = "";
-    if (m.finished) {
-      el.textContent = "Misión completada · " + m.days_total + " días";
-      el.classList.add("finished");
-    } else {
-      el.textContent = "Día " + m.day + "/" + m.days_total + " · " + m.difficulty;
-      el.classList.remove("finished");
+    if (!m || !m.active) {
+      el.textContent = ""; el.style.display = "none";
+      if (clk) { clk.textContent = ""; clk.style.display = "none"; }
+      _lastMission = null;
+      return;
     }
+    el.style.display = "";
+    _lastMission = m;
+    _lastFetchAt = Date.now();
+    renderClock();
+    if (m.finished) showEndScreen(m);
   }).catch(() => { /* sin backend: no se muestra el reloj */ });
 }
 syncMissionDay();
-setInterval(syncMissionDay, 30000);
+setInterval(syncMissionDay, 5000);
+setInterval(renderClock, 1000);
+// Botones de la pantalla de fin de mision.
+document.getElementById("endMenuBtn").addEventListener("click", () => { location.href = "../menu/index.html"; });
+document.getElementById("endRestartBtn").addEventListener("click", () => { restartMission(); });
 
 /* ============ REINICIAR PARTIDA / SALIR AL MENÚ ============ */
 // Reiniciar: vuelve a lanzar la misma misión desde el Día 1 (POST
 // /api/mission/start con la configuración actual; el backend además limpia
 // los módulos atendidos y los eventos aplicados, y los eventos NASA que
 // sigan activos se vuelven a aplicar en el próximo poll).
-document.getElementById("restartBtn").addEventListener("click", async () => {
+// Reiniciar: vuelve a lanzar la misma mision desde el Dia 1 (v13: es una
+// funcion con nombre para que tambien la use el boton "Jugar otra vez" de
+// la pantalla de fin de mision).
+async function restartMission() {
   if (!confirm("¿Reiniciar la partida? El reloj vuelve al Día 1 y las anomalías activas se vuelven a aplicar.")) return;
   let cfg = {};
   try { cfg = JSON.parse(localStorage.getItem("xonidu-mission-v1") || "{}") || {}; } catch (e) {}
@@ -274,10 +352,11 @@ document.getElementById("restartBtn").addEventListener("click", async () => {
   try {
     await fetch("/api/mission/start", { method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ objetivo: cfg.objetivo, orbita: cfg.orbita, lanzador: cfg.lanzador, difficulty, days }) });
+      body: JSON.stringify({ objetivo: cfg.objetivo, orbita: cfg.orbita, lanzador: cfg.lanzador, difficulty, days, fit_score: cfg.score || 0, components: cfg.components || {} }) });
   } catch (e) { /* sin backend: recargar igual */ }
   location.reload();
-});
+}
+document.getElementById("restartBtn").addEventListener("click", restartMission);
 // Salir al menú: ahí se elige otra misión o dificultad (el menú limpia la
 // sesión al entrar, así que hay que iniciar la misión desde ahí).
 document.getElementById("menuBtn").addEventListener("click", () => {
