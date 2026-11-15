@@ -29,17 +29,17 @@
 </head>
 <body>
   <header class="bar">
-    <h1>Station Map</h1>
-    <span id="missionDay" class="mission-day" title="Día de la misión"></span>
-    <span id="missionClock" class="mission-day mission-clock" title="Tiempo que queda de este día (minutos:segundos)"></span>
+    <h1 data-i18n="stationMap">Station Map</h1>
+    <span id="missionDay" class="mission-day" data-i18n-title="missionDayTitle"></span>
+    <span id="missionClock" class="mission-day mission-clock" data-i18n-title="missionClockTitle"></span>
     <div class="legend">
-      <span><i class="dot ok"></i>Normal</span>
-      <span><i class="dot warn"></i>Anomalía</span>
-      <span><i class="dot crit"></i>Crítico</span>
+      <span><i class="dot ok"></i><span data-i18n="legendNormal">Normal</span></span>
+      <span><i class="dot warn"></i><span data-i18n="legendAnomaly">Anomalía</span></span>
+      <span><i class="dot crit"></i><span data-i18n="legendCritical">Crítico</span></span>
     </div>
     <div class="map-actions">
-      <button id="restartBtn" class="map-action-btn" type="button" title="Reiniciar la partida: el reloj vuelve al Día 1 y las anomalías activas se vuelven a aplicar">↺ Reiniciar partida</button>
-      <button id="menuBtn" class="map-action-btn" type="button" title="Salir al menú para elegir otra misión o dificultad">☰ Menú</button>
+      <button id="restartBtn" class="map-action-btn" type="button" data-i18n="restartMission" data-i18n-title="restartBtnTitle">↺ Reiniciar partida</button>
+      <button id="menuBtn" class="map-action-btn" type="button" data-i18n="menuBtn" data-i18n-title="menuBtnTitle">☰ Menú</button>
     </div>
   </header>
 
@@ -59,16 +59,16 @@
     <nav id="zoneGrid" class="zone-grid" aria-label="Zonas de la estación"></nav>
 
     <aside class="panel">
-      <p id="hint" class="muted">Toca una zona (A–F) para seleccionarla.</p>
+      <p id="hint" class="muted" data-i18n="zoneHintMap">Toca una zona (A–F) para seleccionarla.</p>
       <div id="info" hidden>
         <h2 id="zTitle"></h2>
         <p id="zMods" class="muted"></p>
 
-        <h3>Estado en vivo</h3>
+        <h3 data-i18n="liveStatus">Estado en vivo</h3>
         <p id="zStatus" class="muted">Cargando estado…</p>
         <div id="zModList" class="modlist"></div>
 
-        <button id="mapBtn" class="primary" type="button">MAP · Confirmar e ir a la sección</button>
+        <button id="mapBtn" class="primary" type="button" data-i18n="mapButton">MAP · Confirmar e ir a la sección</button>
       </div>
 
     </aside>
@@ -81,21 +81,22 @@
       <p id="endMission" class="muted"></p>
       <div id="endScore" class="end-score"></div>
       <div class="end-actions">
-        <button id="endMenuBtn" class="primary" type="button">☰ Volver al menú</button>
-        <button id="endRestartBtn" class="ghost" type="button">↺ Jugar otra vez</button>
+        <button id="endMenuBtn" class="primary" type="button" data-i18n="endMenuBtn">☰ Volver al menú</button>
+        <button id="endRestartBtn" class="ghost" type="button" data-i18n="endPlayAgain">↺ Jugar otra vez</button>
       </div>
     </div>
   </section>
 
   <section id="detail" class="detail" hidden>
     <div class="card">
-      <button id="backBtn" class="ghost" type="button">← Volver al mapa</button>
+      <button id="backBtn" class="ghost" type="button" data-i18n="backToMap">← Volver al mapa</button>
       <h2 id="dTitle"></h2>
       <p id="dMods"></p>
-      <p class="muted">Aquí va el contenido de la sección (paneles de sistemas, cámaras, eventos).</p>
+      <p class="muted" data-i18n="sectionContent">Aquí va el contenido de la sección (paneles de sistemas, cámaras, eventos).</p>
     </div>
   </section>
 
+  <script src="../i18n.js?v=1"></script>
   <script src="../store.js?v=14"></script>
   <script src="app.js?v=15"></script>
 </body>

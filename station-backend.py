@@ -378,6 +378,21 @@ def _sync_pending_state():
     STATE["pending_anomalies"] = len(PENDING_ANOMALIES)
 
 
+def _is_cme_earth_directed(ev: dict) -> bool:
+    """Detecta si una CME esta dirigida a la Tierra segun los datos de DONKI.
+    Revisa enlilList[].isEarthGB y enlilList[].impactList[].location == 'Earth'.
+    Si no hay informacion de direccion, asume que NO es dirigida a la Tierra
+    (evita falsos positivos)."""
+    enlil_list = ev.get("enlilList") or []
+    for run in enlil_list:
+        if run.get("isEarthGB") is True:
+            return True
+        for hit in run.get("impactList") or []:
+            if str(hit.get("location", "")).strip().lower() == "earth":
+                return True
+    return False
+
+
 def _apply_nasa_anomaly(zona, slug, nivel, reason=""):
     """Aplica una anomalia de la NASA respetando el tope y el freno de 30 s.
     Si no hay hueco o si se reparo hace menos de 30 s, la deja en cola para
@@ -678,6 +693,10 @@ def nasa_live():
             for ev in sorted(cme_data, key=lambda e: str(e.get("startTime", "")), reverse=True):
                 analyses = ev.get("cmeAnalyses") or []
                 if analyses and analyses[0].get("speed") is not None:
+                    # Solo reportar CMEs dirigidas a la Tierra.
+                    # Una CME que se aleja no es una amenaza para la estacion.
+                    if not _is_cme_earth_directed(ev):
+                        continue
                     out["cme_speed"] = float(analyses[0]["speed"])
                     out["cme_time"] = ev.get("startTime")
                     break
@@ -1010,13 +1029,19 @@ def procesar_eventos_nasa():
     cme_data = nasa_cme()
     if cme_data and isinstance(cme_data, list):
         resultados["cme"] = len(cme_data)
+        cme_max_speed = 0.0  # solo CMEs dirigidas a la Tierra
         for ev in cme_data[-10:]:
             analyses = ev.get("cmeAnalyses") or [{}]
             speed = float((analyses[0] or {}).get("speed", 0) or 0)
             start = ev.get("startTime", "")
             if not _is_fresh(start, fresh_hours):
                 continue
-            # v15: registrar la CME mas rapida AUNQUE no cruce el umbral
+            # SOLO aplicar si la CME viene dirigida a la Tierra.
+            # Una CME rapida que se aleje de la Tierra no es una amenaza.
+            if not _is_cme_earth_directed(ev):
+                print(f"[NASA] CME {speed} km/s ({start}) NO dirigida a la Tierra: se ignora")
+                continue
+            # v15: registrar la CME mas rapida dirigida a la Tierra
             # (la senal temprana PRE la necesita para avisar antes).
             if speed > cme_max_speed:
                 cme_max_speed = speed
@@ -1029,8 +1054,7 @@ def procesar_eventos_nasa():
             mods = [("c", "energy"), ("f", "energy")]
             # v16: una CME MUY rapida (> cme_fast_speed) es un evento grande:
             # ademas de la energia, trae radiacion (particulas) y afecta a
-            # las comunicaciones (apagon de radio). Hoy la CME de 624 km/s
-            # ya entra en este caso.
+            # las comunicaciones (apagon de radio).
             if speed > float(GAME_CONFIG.get("cme_fast_speed", 600)):
                 mods = mods + [("a", "radiation"), ("f", "radiation"),
                                ("d", "comms"), ("f", "comms")]
@@ -1040,7 +1064,7 @@ def procesar_eventos_nasa():
                 ATTENDED.discard(f"{zona}.{slug}")
                 if STATE["modulos"].get(zona, {}).get(slug) in ("ok", "pre"):
                     _apply_nasa_anomaly(zona, slug, "warn", "CME")
-            print(f"[NASA] CME {speed} km/s ({start}) -> energia warn")
+            print(f"[NASA] CME {speed} km/s ({start}) -> energia warn (Tierra)")
             supabase_guardar_evento_nasa("cme", "eyeccion_masa_coronal",
                 "alta", start, ev, ["mod-c-energy", "mod-f-energy"])
 

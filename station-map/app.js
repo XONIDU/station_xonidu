@@ -8,6 +8,29 @@ const CONFIG = {
 
 // x, y, w, h en % de la imagen (0–100).
 // url: si pones una página (p. ej. "zona-a.html") el botón MAP navega ahí; si es null usa la vista interna.
+const MOD_NAME_KEYS = {
+  "Habitabilidad": "modHabitability",
+  "Salud": "modHealth",
+  "ECLSS": "modEclss",
+  "Incendios": "modFire",
+  "Radiación": "modRadiation",
+  "Alimentos": "modFood",
+  "Térmico": "modThermal",
+  "Energía": "modEnergy",
+  "Comando": "modCommand",
+  "Navegación": "modNavigation",
+  "Comms": "modComms",
+  "Robótica": "modRobotics",
+  "Estructura": "modStructure",
+  "Robótica/EVA": "modRoboticsEva",
+  "Ciencia": "modScience",
+  "Propulsión": "modPropulsion"
+};
+function modName(spanishName) {
+  const key = MOD_NAME_KEYS[spanishName];
+  return key ? t(key) : spanishName;
+}
+
 const ZONES = [
   { id:"A", name:"Habitat & Services",       mods:["Habitabilidad","Salud","ECLSS","Incendios","Radiación"],                       x:8.00, y:31.33, w:12.75, h:36.40, status:"ok", url:"../zone-a/index.html" },
   { id:"B", name:"Laboratory & Crops",       mods:["Alimentos","Térmico","Energía","Incendios"],                                       x:22.31, y:31.33, w:12.75, h:36.40, status:"ok", url:"../zone-b/index.html" },
@@ -58,7 +81,7 @@ function updateMapButtonBlink() {
 /* ============ ESTADO ============ */
 const $ = (s) => document.querySelector(s);
 const stage = $("#stage"), zonesEl = $("#zones"), bg = $("#bg");
-const STATUS_LABEL = { ok:"Normal", warn:"Anomalía", crit:"Crítico" };
+const STATUS_LABEL = { ok: t("moduleStatusOk"), warn: t("moduleStatusWarn"), crit: t("moduleStatusCrit") };
 let selected = null;
 
 // Recupera coordenadas guardadas (si el navegador lo permite)
@@ -135,12 +158,12 @@ function renderPanel() {
   $("#info").hidden = !z;
   if (!z) return;
   $("#zTitle").textContent = `Zona ${z.id} · ${z.name}`;
-  $("#zMods").textContent = "Módulos: " + z.mods.join(", ");
+  $("#zMods").textContent = t("modulesLabel") + z.mods.map(m => modName(m)).join(", ");
   // Estado EN VIVO desde el store (backend + datos reales de la NASA).
   // No hay botones manuales: el estado lo pone el backend, no el jugador.
   const mods = stationStore.getZoneModules(z.id.toLowerCase());
   const zs = stationStore.getZoneStatus(z.id.toLowerCase());
-  const label = { ok: "Normal", warn: "Anomalía", crit: "Crítico" }[zs] || zs;
+  const label = { ok: t("moduleStatusOk"), warn: t("moduleStatusWarn"), crit: t("moduleStatusCrit") }[zs] || zs;
   $("#zStatus").textContent = `Estado en vivo: ${label}`;
   const list = $("#zModList");
   list.innerHTML = "";
@@ -206,7 +229,7 @@ function route() {
   const m = location.hash.match(/^#zona-([a-f])$/i);
   const z = m && ZONES.find(z => z.id === m[1].toUpperCase());
   $("#detail").hidden = !z;
-  if (z) { $("#dTitle").textContent = `Zona ${z.id} · ${z.name}`; $("#dMods").textContent = "Módulos: " + z.mods.join(", "); }
+  if (z) { $("#dTitle").textContent = t("zoneTitle").replace("{id}", z.id).replace("{name}", z.name); $("#dMods").textContent = "Módulos: " + z.mods.join(", "); }
 }
 window.addEventListener("hashchange", route);
 $("#backBtn").addEventListener("click", () => { location.hash = ""; });
@@ -278,29 +301,29 @@ function showEndScreen(m) {
   const titleEl = document.getElementById("endTitle");
   if (titleEl) {
     if (m.failed) {
-      titleEl.textContent = "Misión fallida";
+      titleEl.textContent = t("endMissionFailed");
       titleEl.style.color = "#e74c3c";
     } else {
-      titleEl.textContent = "Misión completada";
+      titleEl.textContent = t("endMissionCompleted");
       titleEl.style.color = "";
     }
   }
   document.getElementById("endMission").textContent =
-    (m.objetivo || "Misión") + " · " + m.days_total + " días · " + m.difficulty;
+    t("endMissionCompleted") + " · " + m.days_total + " días · " + m.difficulty;
   const row = (label, val) =>
     '<div class="row"><span>' + label + '</span><b>' + val + '</b></div>';
   document.getElementById("endScore").innerHTML =
-    row("Diseño (órbita + lanzador)", (s.fit || 0) + " pts")
-    + row("Completar la misión", "+" + (s.complete || 0) + " pts")
-    + row("Reparaciones (" + (s.n_repairs || 0) + " × 50)", "+" + (s.repairs || 0) + " pts")
-    + row("Módulos en crítico (" + (s.n_crits || 0) + " × −50)", (s.crits || 0) + " pts")
-    + (s.penalties ? row("Diagnósticos errados (" + (s.n_penalties || 0) + " × −10)", (s.penalties || 0) + " pts") : "")
-    + row("Datos científicos (DATA)", "+" + (s.data || 0) + " pts")
-    + row("Combustible (se agotó antes de terminar)", (s.fuel || 0) + " pts")
-    + (s.drain ? row("Drenaje (módulos en crítico sin atender)", (s.drain || 0) + " pts") : "")
-    + (m.failed ? row("Motivo del fallo", (s.n_crits || 0) >= 6 ? "6+ módulos en crítico" : "El score llegó a 0") : "")
-    + row("Integridad de la misión", (s.integrity !== undefined ? Math.round(s.integrity) : 100) + "%")
-    + '<div class="row total"><span>SCORE TOTAL</span><span>' + (s.total || 0) + " pts</span></div>";
+    row(t("endScoreDesign"), (s.fit || 0) + " pts")
+    + row(t("endScoreComplete"), "+" + (s.complete || 0) + " pts")
+    + row(t("endScoreRepairs") + " (" + (s.n_repairs || 0) + " × 50)", "+" + (s.repairs || 0) + " pts")
+    + row(t("endScoreCriticals") + " (" + (s.n_crits || 0) + " × −50)", (s.crits || 0) + " pts")
+    + (s.penalties ? row(t("endScorePenalties") + " (" + (s.n_penalties || 0) + " × −10)", (s.penalties || 0) + " pts") : "")
+    + row(t("endScoreData"), "+" + (s.data || 0) + " pts")
+    + row(t("endScoreFuel"), (s.fuel || 0) + " pts")
+    + (s.drain ? row(t("endScoreDrain"), (s.drain || 0) + " pts") : "")
+    + (m.failed ? row(t("endScoreReason"), (s.n_crits || 0) >= 6 ? t("endScoreFailedCauseCrit") : t("endScoreFailedCauseScore")) : "")
+    + row(t("endScoreIntegrity"), (s.integrity !== undefined ? Math.round(s.integrity) : 100) + "%")
+    + '<div class="row total"><span>' + t("endScoreTotal") + '</span><span>' + (s.total || 0) + " pts</span></div>";
   const fuel = m.fuel || {};
   if (fuel.capacity) {
     document.getElementById("endMission").textContent += " · FUEL " + (fuel.remaining || 0) + "/" + fuel.capacity + " kg";
@@ -326,7 +349,7 @@ function renderClock() {
   if (!el || !clk || !_lastMission) return;
   var m = _lastMission;
   if (m.finished) {
-    el.textContent = (m.failed ? "Misión fallida · " : "Misión completada · ") + m.days_total + " días · " + fmtHM(m.minutes_total);
+    el.textContent = (m.failed ? t("endScoreFailed") + " · " : t("endMissionCompleted") + " · ") + m.days_total + " " + t("daysLabel") + " · " + fmtHM(m.minutes_total);
     el.classList.add("finished");
     clk.textContent = "";
     clk.style.display = "none";
@@ -339,13 +362,13 @@ function renderClock() {
   var dayElapsedMin = elapsedMin % perDay;
   var dayLeftSec = Math.max(0, (perDay - dayElapsedMin) * 60);
   var day = Math.min(m.days_total, Math.floor(elapsedMin / perDay) + 1);
-  el.textContent = "Día " + day + "/" + m.days_total;
+  el.textContent = t("zoneTitle").replace("{id}", "Día").replace("{name}", day + "/" + m.days_total);
   el.classList.remove("finished");
-  clk.textContent = "⏱ " + fmtMS(dayLeftSec) + " · restan " + fmtHM(Math.max(0, (m.minutes_total || 0) - elapsedMin));
+  clk.textContent = "⏱ " + fmtMS(dayLeftSec) + " " + t("remainingLabel") + " " + fmtHM(Math.max(0, (m.minutes_total || 0) - elapsedMin));
   // Integridad de la mision (baja mientras haya modulos en crit).
   var integ = m.integrity !== undefined ? Math.round(m.integrity) : 100;
   var integCls = integ >= 50 ? "" : (integ >= 25 ? " warn" : " crit");
-  clk.textContent += " · Integridad " + integ + "%";
+  clk.textContent += " " + t("integrityLabel") + " " + integ + "%";
   clk.style.display = "";
 }
 function syncMissionDay() {
@@ -389,7 +412,7 @@ function _str(v) {
   return (v == null ? "" : String(v));
 }
 async function restartMission() {
-  if (!confirm("¿Reiniciar la partida? El reloj vuelve al Día 1 y las anomalías activas se vuelven a aplicar.")) return;
+  if (!confirm(t("restartBtnTitle"))) return;
   let cfg = {};
   try { cfg = JSON.parse(localStorage.getItem("xonidu-mission-v1") || "{}") || {}; } catch (e) {}
   const difficulty = localStorage.getItem("xonidu-difficulty-v1") || "medio";
@@ -404,7 +427,7 @@ async function restartMission() {
   if (!ok) {
     // Antes recargaba igual aunque el POST fallara, y volvia la misma
     // mision fallida: parecia que "no reinicia". Ahora avisa y no recarga.
-    alert("No se pudo reiniciar: no hay conexión con el servidor del juego. Revisa que el backend esté corriendo y vuelve a intentarlo.");
+    alert(t("restartFailAlert"));
     return;
   }
   // Ocultar la pantalla de fin de inmediato para que se vea el reinicio.
@@ -420,6 +443,9 @@ document.getElementById("menuBtn").addEventListener("click", () => {
 });
 
 window.addEventListener("station:missionreset", () => {
-  toast("Otro jugador reinició la partida");
+  toast(t("toastMissionReset"));
   setTimeout(() => location.reload(), 1000);
 });
+
+// Initial translation of all [data-i18n] elements
+applyLang();

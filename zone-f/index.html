@@ -29,11 +29,11 @@
 </head>
 <body>
   <header class="bar">
-    <h1>Zone F — Exterior Assembly</h1>
+    <h1 data-i18n="zoneF">Zone F — Exterior Assembly</h1>
     <div class="legend">
-      <span><i class="dot ok"></i>Normal</span>
-      <span><i class="dot warn"></i>Anomalía</span>
-      <span><i class="dot crit"></i>Crítico</span>
+      <span><i class="dot ok"></i><span data-i18n="legendNormal">Normal</span></span>
+      <span><i class="dot warn"></i><span data-i18n="legendAnomaly">Anomalía</span></span>
+      <span><i class="dot crit"></i><span data-i18n="legendCritical">Crítico</span></span>
     </div>
   </header>
 
@@ -46,26 +46,27 @@
     </div>
 
     <aside class="panel">
-      <p id="hint" class="muted">Toca un módulo para seleccionarlo.</p>
+      <p id="hint" class="muted" data-i18n="zoneHint">Toca un módulo para seleccionarlo.</p>
       <div id="info" hidden>
         <h2 id="mTitle"></h2>
       </div>
-      <button id="mapBtn" class="primary" type="button">MAP · Volver al mapa</button>
+      <button id="mapBtn" class="primary" type="button" data-i18n="mapButtonLabel">MAP · Volver al mapa</button>
 
     </aside>
   </main>
 
-  <section id="moduleScreen" class="module-screen" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Pantalla del modulo">
-    <button id="moduleExit" type="button" class="module-exit" aria-label="Cerrar pantalla del modulo">✕</button>
+  <section id="moduleScreen" class="module-screen" hidden aria-hidden="true" role="dialog" aria-modal="true" data-i18n-aria="moduleScreenLabel">
+    <button id="moduleExit" type="button" class="module-exit" data-i18n-aria="moduleExitAria">✕</button>
     <div class="module-card">
-      <h2 id="moduleTitle">Module</h2>
+      <h2 id="moduleTitle" data-i18n="moduleScreenTitle">Module</h2>
       <div id="moduleId" class="module-id">mod-f-energy_propulsion</div>
       <div id="moduleStatus" class="module-status ok">OK</div>
-      <iframe id="moduleFrame" title="Pantalla del módulo" src="about:blank"></iframe>
+      <iframe id="moduleFrame" data-i18n-title="moduleFrameTitle" title="Pantalla del módulo" src="about:blank"></iframe>
       <div id="simPlaceholder" class="sim-placeholder" hidden>SIMULATION PENDING</div>
     </div>
   </section>
 
+  <script src="../i18n.js?v=1"></script>
   <script src="../store.js?v=14"></script>
   <script src="app.js?v=14"></script>
 </body>

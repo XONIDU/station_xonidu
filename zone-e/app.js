@@ -17,8 +17,8 @@ const MODULES = [
 /* ============ ESTADO ============ */
 const $ = (s) => document.querySelector(s);
 const stage = $("#stage"), svg = $("#shapes");
-const STATUS_TEXT = { ok:"OK", warn:"WARNING", crit:"CRITICAL" };
-const STATUS_SHORT = { ok:"OK", pre:"PRE", warn:"WARN", crit:"CRIT" };
+const STATUS_TEXT = { ok: t("moduleStatusOk"), warn: t("moduleStatusWarn"), crit: t("moduleStatusCrit") };
+const STATUS_SHORT = { ok: t("moduleStatusOk"), pre: t("moduleStatusPre"), warn: t("moduleStatusWarn"), crit: t("moduleStatusCrit") };
 const NS = "http://www.w3.org/2000/svg";
 let selected = null;
 
@@ -53,7 +53,7 @@ function render() {
     p.dataset.moduleId = localFullId(m.id);
     p.setAttribute("tabindex", "0");
     p.setAttribute("role", "button");
-    p.setAttribute("aria-label", `${m.name}. Estado: ${STATUS_TEXT[m.status]}`);
+    p.setAttribute("aria-label", m.name + ". " + t("moduleStatus" + m.status.charAt(0).toUpperCase() + m.status.slice(1)));
     svg.appendChild(p);
     // Etiqueta de estado en vivo sobre el monitor: cada monitor muestra su
     // propio estado (OK / WARN / CRIT). Es la interfaz del modulo: se ve de
@@ -86,7 +86,8 @@ function render() {
     nameLine.setAttribute("x", cx);
     nameLine.setAttribute("dy", "-3.2");
     nameLine.setAttribute("class", "poly-label-name");
-    nameLine.textContent = m.name.replace(/^Module:\s*/, "").toUpperCase();
+    const modKey = "mod" + m.id.charAt(0).toUpperCase() + m.id.slice(1);
+    nameLine.textContent = t(modKey);
     // Tercera linea: la actividad en vivo del modulo (valor real de la
     // NASA que lo afecta). Si no hay dato todavia, no se dibuja la linea.
     const liveText = (typeof stationStore !== "undefined" && stationStore.getModuleLiveLabel)
@@ -150,10 +151,11 @@ function openModule(moduleId) {
   if (!m) return;
   // Clic en CUALQUIER modulo abre su pantalla expandida, este normal o con falla.
   activeModule = moduleId;
-  screenTitle.textContent = m.name;
+  const modKey = "mod" + m.id.charAt(0).toUpperCase() + m.id.slice(1);
+  screenTitle.textContent = t(modKey);
   screenId.textContent = moduleId;
   const st = stationStore.getModuleStatus(moduleId);
-  screenStatus.textContent = STATUS_TEXT[st];
+  screenStatus.textContent = t("moduleStatus" + st.charAt(0).toUpperCase() + st.slice(1));
   screenStatus.className = "module-status " + st;
   if (st !== "ok") screenStatus.classList.add("blink-" + st);
   frame.src = "modulos/" + m.id + ".html";
@@ -180,7 +182,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape" && !screen.hi
 /* sincronizar con la tienda compartida mientras la pantalla esta abierta */
 window.addEventListener("station:modulestatuschange", e => {
   if (activeModule && e.detail.moduleId === activeModule) {
-    screenStatus.textContent = STATUS_TEXT[e.detail.status] || STATUS_TEXT.ok;
+    screenStatus.textContent = t("moduleStatus" + (e.detail.status || "ok").charAt(0).toUpperCase() + (e.detail.status || "ok").slice(1));
     screenStatus.className = "module-status " + (e.detail.status || "ok");
   }
   syncModuleStatus();
@@ -293,8 +295,9 @@ function toast(msg) {
   clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove("show"), 1600);
 }
 window.addEventListener("station:missionreset", () => {
-  toast("Otro jugador reinició la partida");
+  toast(t("toastMissionReset"));
   setTimeout(() => location.reload(), 1000);
 });
 
 render();
+applyLang();

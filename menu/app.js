@@ -1218,6 +1218,20 @@ function setHud(update) {
 }
 window.setHud = setHud;
 
+// Exponer el sistema de idiomas para que las otras páginas (zonas, mapa,
+// modulos) puedan traducir sus textos segun el idioma elegido en el menu.
+window.XONIDU_I18N = {
+  LANG: LANG,
+  STRINGS: STRINGS,
+  t: function (key) { return STRINGS[LANG] && STRINGS[LANG][key] ? STRINGS[LANG][key] : key; },
+  applyLang: applyLang,
+  setLang: function (lang) {
+    LANG = lang;
+    try { localStorage.setItem(LANG_KEY, LANG); } catch (e) {}
+    applyLang();
+  }
+};
+
 // Redondea a 1 decimal (evita 0.30000000000000004 al sumar componentes).
 const fmt1 = (n) => String(Math.round(Number(n) * 10) / 10);
 

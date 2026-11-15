@@ -44,7 +44,7 @@ const MODULES = [
 const $ = (s) => document.querySelector(s);
 const stage = $("#stage"), svg = $("#shapes");
 const STATUS_LABEL = { ok:"Normal", warn:"Anomalía", crit:"Crítico" };
-const STATUS_SHORT = { ok:"OK", pre:"PRE", warn:"WARN", crit:"CRIT" };
+const STATUS_SHORT = { ok: t("moduleStatusOk"), pre: t("moduleStatusPre"), warn: t("moduleStatusWarn"), crit: t("moduleStatusCrit") };
 const NS = "http://www.w3.org/2000/svg";
 let selected = null;
 
@@ -102,7 +102,8 @@ function render() {
     nameLine.setAttribute("x", cx);
     nameLine.setAttribute("dy", "-3.2");
     nameLine.setAttribute("class", "poly-label-name");
-    nameLine.textContent = m.name.replace(/^Module:\s*/, "").toUpperCase();
+    const modKey = "mod" + m.id.charAt(0).toUpperCase() + m.id.slice(1);
+    nameLine.textContent = t(modKey);
     // Tercera linea: la actividad en vivo del modulo (valor real de la
     // NASA que lo afecta). Si no hay dato todavia, no se dibuja la linea.
     const liveText = (typeof stationStore !== "undefined" && stationStore.getModuleLiveLabel)
@@ -195,7 +196,8 @@ function openModule(groupId) {
   if (!m) return;
   // Clic en CUALQUIER modulo abre su pantalla expandida, este normal o con falla.
   activeModule = groupId;
-  screenTitle.textContent = m.name;
+  const modKey = "mod" + m.id.charAt(0).toUpperCase() + m.id.slice(1);
+  screenTitle.textContent = t(modKey);
   screenId.textContent = localFullId(groupId);
   const st = m.status;
   screenStatus.textContent = STATUS_LABEL[st];
@@ -296,12 +298,13 @@ function toast(msg) {
   clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove("show"), 1600);
 }
 window.addEventListener("station:missionreset", () => {
-  toast("Otro jugador reinició la partida");
+  toast(t("toastMissionReset"));
   setTimeout(() => location.reload(), 1000);
 });
 
 syncFromStore();
 render();
+applyLang();
 
 // Alerta del boton MAP y apertura automatica del modulo desde el mapa (?mod=X)
 updateMapBlink();
