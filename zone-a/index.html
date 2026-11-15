@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zone A — Habitat & Services</title>
+  <link rel="stylesheet" href="style.css?v=7">
+  <script>
+    // El juego empieza obligatoriamente en el menu. Si no hay sesion iniciada
+    // o no hay una mision activa en el backend, se redirige al menu.
+    async function ensureMenu() {
+      if (!sessionStorage.getItem("xonidu-started")) {
+        location.replace("../menu/index.html"); return;
+      }
+      try {
+        const r = await fetch("/api/mission");
+        if (r.ok) {
+          const d = await r.json();
+          if (!d || !d.mission || !d.mission.active) {
+            location.replace("../menu/index.html"); return;
+          }
+        }
+      } catch (e) {
+        // Sin backend: confiamos en la sesion
+      }
+    }
+    ensureMenu();
+  </script>
+</head>
+<body>
+  <header class="bar">
+    <h1>Zone A — Habitat &amp; Services</h1>
+    <div class="legend">
+      <span><i class="dot ok"></i>Normal</span>
+      <span><i class="dot warn"></i>Anomalía</span>
+      <span><i class="dot crit"></i>Crítico</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <div id="stage" class="stage">
+      <img id="bg" src="zone-a.png" alt="Zone A — Habitat and Services">
+      <svg id="shapes" class="shapes" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+      <button id="mapHot" class="maphot" type="button" aria-label="MAP: back to the station map"></button>
+      <div id="toast" class="toast" role="status"></div>
+    </div>
+
+    <aside class="panel">
+      <p id="hint" class="muted">Toca un módulo para seleccionarlo.</p>
+      <div id="info" hidden>
+        <h2 id="mTitle"></h2>
+      </div>
+      <button id="mapBtn" class="primary" type="button">MAP · Volver al mapa</button>
+
+    </aside>
+  </main>
+
+  <section id="moduleScreen" class="module-screen" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Pantalla del modulo">
+    <button id="moduleExit" type="button" class="module-exit" aria-label="Cerrar pantalla del modulo">✕</button>
+    <div class="module-card">
+      <h2 id="moduleTitle">Module</h2>
+      <div id="moduleId" class="module-id">mod-a-eclss</div>
+      <div id="moduleStatus" class="module-status ok">OK</div>
+      <iframe id="moduleFrame" title="Pantalla del módulo" src="about:blank"></iframe>
+      <div id="simPlaceholder" class="sim-placeholder" hidden>SIMULATION PENDING</div>
+    </div>
+  </section>
+
+  <script src="../store.js?v=7"></script>
+  <script src="app.js?v=7"></script>
+</body>
+</html>

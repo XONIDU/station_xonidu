@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Station Map</title>
+  <link rel="stylesheet" href="style.css?v=7">
+  <script>
+    // El juego empieza obligatoriamente en el menu. Si no hay sesion iniciada
+    // o no hay una mision activa en el backend, se redirige al menu.
+    async function ensureMenu() {
+      if (!sessionStorage.getItem("xonidu-started")) {
+        location.replace("../menu/index.html"); return;
+      }
+      try {
+        const r = await fetch("/api/mission");
+        if (r.ok) {
+          const d = await r.json();
+          if (!d || !d.mission || !d.mission.active) {
+            location.replace("../menu/index.html"); return;
+          }
+        }
+      } catch (e) {
+        // Sin backend: confiamos en la sesion
+      }
+    }
+    ensureMenu();
+  </script>
+</head>
+<body>
+  <header class="bar">
+    <h1>Station Map</h1>
+    <span id="missionDay" class="mission-day" title="Día de la misión"></span>
+    <div class="legend">
+      <span><i class="dot ok"></i>Normal</span>
+      <span><i class="dot warn"></i>Anomalía</span>
+      <span><i class="dot crit"></i>Crítico</span>
+    </div>
+    <div class="map-actions">
+      <button id="restartBtn" class="map-action-btn" type="button" title="Reiniciar la partida: el reloj vuelve al Día 1 y las anomalías activas se vuelven a aplicar">↺ Reiniciar partida</button>
+      <button id="menuBtn" class="map-action-btn" type="button" title="Salir al menú para elegir otra misión o dificultad">☰ Menú</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <div id="stage" class="stage">
+      <!-- Cambia el nombre del archivo en app.js (CONFIG.image) -->
+      <img id="bg" alt="Station map">
+      <div id="zones" class="zones"></div>
+      <button id="mapHot" class="maphot" type="button" aria-label="MAP: confirm and go to the selected zone"></button>
+      <div id="toast" class="toast" role="status"></div>
+    </div>
+
+    <aside class="panel">
+      <p id="hint" class="muted">Toca una zona (A–F) para seleccionarla.</p>
+      <div id="info" hidden>
+        <h2 id="zTitle"></h2>
+        <p id="zMods" class="muted"></p>
+
+        <h3>Estado en vivo</h3>
+        <p id="zStatus" class="muted">Cargando estado…</p>
+        <div id="zModList" class="modlist"></div>
+
+        <button id="mapBtn" class="primary" type="button">MAP · Confirmar e ir a la sección</button>
+      </div>
+
+    </aside>
+  </main>
+
+  <section id="detail" class="detail" hidden>
+    <div class="card">
+      <button id="backBtn" class="ghost" type="button">← Volver al mapa</button>
+      <h2 id="dTitle"></h2>
+      <p id="dMods"></p>
+      <p class="muted">Aquí va el contenido de la sección (paneles de sistemas, cámaras, eventos).</p>
+    </div>
+  </section>
+
+  <script src="../store.js?v=7"></script>
+  <script src="app.js?v=7"></script>
+</body>
+</html>

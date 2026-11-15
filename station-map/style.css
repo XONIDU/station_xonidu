@@ -1,0 +1,130 @@
+:root{
+  --bg:#0b1220; --panel:#121a2b; --line:#24324d; --text:#e8eefc; --muted:#93a1bf;
+  --ok:46,204,113; --warn:241,196,15; --crit:231,76,60;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+body{display:flex;flex-direction:column}
+.bar{display:flex;align-items:center;gap:16px;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap;flex:0 0 auto}
+.bar h1{font-size:17px;margin:0;flex:1}
+.mission-day{font-size:14px;font-weight:700;letter-spacing:1px;color:var(--cyan);border:1px solid #1e4a5a;border-radius:8px;padding:4px 10px;background:rgba(8,14,28,.85);white-space:nowrap}
+.mission-day.finished{color:#f1c40f;border-color:#f1c40f}
+.legend{display:flex;gap:14px;color:var(--muted);font-size:13px}
+/* Acciones de la partida (HTML, en la cabecera): reiniciar o salir al menu.
+   Son los unicos botones de control del juego fuera del menu. */
+.map-actions{display:flex;gap:8px;margin-left:auto}
+.map-action-btn{padding:6px 12px;border-radius:8px;border:1px solid #1e4a5a;
+  background:rgba(8,14,28,.85);color:#dff6ff;cursor:pointer;font:inherit;font-size:13px;white-space:nowrap}
+.map-action-btn:hover{border-color:#00e5ff;background:#16414f}
+#restartBtn:hover{border-color:#f1c40f}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+.dot.ok{background:rgb(var(--ok))}.dot.warn{background:rgb(var(--warn))}.dot.crit{background:rgb(var(--crit))}
+
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0;padding:0;align-items:start;flex:1 1 auto;overflow:hidden;min-height:0}
+@media(max-width:820px){
+  /* Movil: una columna, la pagina hace scroll y el mapa se ve entero.
+     Sin esto el .stage con height:100% empujaba el panel fuera de la
+     pantalla y la imagen quedaba recortada a la izquierda. */
+  html,body{overflow:auto}
+  body{height:auto;min-height:100%}
+  .layout{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto;overflow:visible}
+  .stage{height:auto;aspect-ratio:1600/1066}
+  .stage img{width:100%;height:100%;object-fit:contain}
+  .panel{overflow-y:visible}
+}
+
+/* ---------- Imagen + zonas ---------- */
+.stage{position:relative;width:100%;height:100%;overflow:hidden;background:var(--bg);min-width:0;min-height:0}
+.stage img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}
+.stage.no-bg{aspect-ratio:16/9}
+.stage.no-bg img{display:none}
+.zones{position:absolute;inset:0}
+
+.zone{position:absolute;border:2px solid rgba(var(--c),.85);background:rgba(var(--c),.28);
+  border-radius:14px;cursor:pointer;color:#fff;padding:0;transition:background .2s,box-shadow .2s;touch-action:none}
+.zone:hover{background:rgba(var(--c),.40)}
+.zone.ok{--c:var(--ok)}
+.zone.warn{--c:var(--warn);background:rgba(var(--c),.34)}
+.zone.crit{--c:var(--crit);background:rgba(var(--c),.40)}
+.zone.sel{outline:3px solid #fff;outline-offset:2px}
+.zone.blink-warn{animation:blinkZoneWarn 1.2s infinite;border-color:rgb(var(--warn))}
+.zone.blink-crit{animation:blinkZoneCrit .5s infinite;border-color:rgb(var(--crit))}
+@keyframes blinkZoneWarn{0%,100%{box-shadow:none;background:rgba(var(--warn),.28)}50%{box-shadow:0 0 18px 6px rgba(241,196,15,.75);background:rgba(241,196,15,.34)}}
+@keyframes blinkZoneCrit{0%,100%{box-shadow:none;background:rgba(var(--crit),.28)}50%{box-shadow:0 0 18px 6px rgba(231,76,60,.85);background:rgba(231,76,60,.40)}}
+.zone .tag{position:absolute;left:6px;top:4px;font-weight:700;font-size:clamp(14px,2.4vw,26px);
+  text-shadow:0 1px 4px #000;pointer-events:none}
+.zone .name{position:absolute;left:6px;bottom:4px;right:6px;font-size:clamp(9px,1.2vw,12px);
+  text-align:left;text-shadow:0 1px 3px #000;pointer-events:none}
+@keyframes pulse{50%{box-shadow:0 0 18px 4px rgba(var(--crit),.7)}}
+
+
+
+/* ---------- Panel ---------- */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;overflow-y:auto;min-width:0}
+.panel h2{margin:0 0 4px;font-size:16px}
+.panel h3{margin:14px 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#info{flex:1 1 auto}
+.muted{color:var(--muted);margin:4px 0}
+button{font:inherit;color:var(--text);border:1px solid var(--line);background:#1a2540;border-radius:8px;
+  padding:8px 12px;cursor:pointer}
+button:hover{filter:brightness(1.15)}
+.ghost{background:transparent}
+.primary{width:100%;margin-top:auto;padding:12px;font-weight:700;background:#2f6df6;border-color:#2f6df6;position:sticky;bottom:0;z-index:10}
+.seg{display:flex;gap:6px}
+.seg button{flex:1;padding:8px 4px}
+.seg .ok{border-color:rgb(var(--ok))}.seg .warn{border-color:rgb(var(--warn))}.seg .crit{border-color:rgb(var(--crit))}
+.seg button.on.ok{background:rgba(var(--ok),.35)}
+.seg button.on.warn{background:rgba(var(--warn),.35)}
+.seg button.on.crit{background:rgba(var(--crit),.4)}
+
+/* ---------- Vista de sección ---------- */
+.detail{position:fixed;inset:0;background:rgba(5,8,16,.85);display:grid;place-items:center;padding:16px;z-index:10}
+.detail[hidden]{display:none}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;max-width:560px;width:100%}
+
+/* ---------- Botón MAP sobre la imagen ---------- */
+.maphot{position:absolute;background:transparent;border:2px solid transparent;border-radius:16px;padding:0;cursor:pointer;touch-action:none}
+.maphot:hover,.maphot:focus-visible{border-color:rgba(120,220,255,.9);box-shadow:0 0 18px rgba(80,200,255,.55);filter:none}
+.toast{position:absolute;left:50%;top:6%;transform:translateX(-50%);background:rgba(8,14,28,.92);border:1px solid var(--line);
+  padding:8px 14px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+
+/* ---------- Boton MAP del mapa con alerta global ---------- */
+.maphot.alert-warn{border-color:rgba(241,196,15,.9);animation:mapHotPulseWarn 1.2s infinite}
+.maphot.alert-crit{border-color:rgba(231,76,60,.9);animation:mapHotPulseCrit .5s infinite}
+#mapBtn.alert-warn{border-color:rgb(var(--warn));background:rgba(241,196,15,.15);animation:mapBtnPulseWarn 1.2s infinite}
+#mapBtn.alert-crit{border-color:rgb(var(--crit));background:rgba(231,76,60,.2);animation:mapBtnPulseCrit .5s infinite}
+@keyframes mapHotPulseWarn{50%{box-shadow:0 0 20px 8px rgba(241,196,15,.75)}}
+@keyframes mapHotPulseCrit{50%{box-shadow:0 0 20px 8px rgba(231,76,60,.85)}}
+@keyframes mapBtnPulseWarn{50%{box-shadow:0 0 20px 8px rgba(241,196,15,.75);background:rgba(241,196,15,.3)}}
+@keyframes mapBtnPulseCrit{50%{box-shadow:0 0 20px 8px rgba(231,76,60,.85);background:rgba(231,76,60,.35)}}
+
+/* ---------- Simulador panel ---------- */
+.sim-presets{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.sim-presets button{flex:1 1 auto;font-size:12px;padding:6px 8px}
+.sim-row{display:flex;gap:10px;align-items:center;margin:6px 0}
+.sim-row label{flex:0 0 110px;color:var(--muted);font-size:12px}
+.sim-row select,.sim-row input{flex:1;font:inherit;padding:6px;border:1px solid var(--line);border-radius:6px;background:#1a2540;color:var(--text)}
+#simStatus{margin-top:6px;font-size:12px;min-height:16px}
+
+/* ---------- Formas poligonales (zona-b.html) ---------- */
+.shapes{position:absolute;inset:0;width:100%;height:100%}
+.poly{fill:rgba(var(--c),.30);stroke:rgba(var(--c),.95);stroke-width:3;vector-effect:non-scaling-stroke;
+  stroke-linejoin:round;cursor:pointer;transition:fill .2s;outline:none}
+.poly.ok{--c:var(--ok)}
+.poly.warn{--c:var(--warn);fill:rgba(var(--c),.36);animation:polypulseWarn 1.2s infinite}
+.poly.crit{--c:var(--crit);fill:rgba(var(--c),.42);animation:polypulseCrit .5s infinite}
+.poly:hover,.poly:focus-visible{fill:rgba(var(--c),.45)}
+.poly.sel{stroke:#fff;stroke-width:4}
+@keyframes polypulseWarn{50%{fill:rgba(var(--warn),.18);stroke:rgba(var(--warn),.55)}}
+@keyframes polypulseCrit{50%{fill:rgba(var(--crit),.15);stroke:rgba(var(--crit),.55)}}
+.handles{position:absolute;inset:0;pointer-events:none}
+.vtx{position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:#fff;
+  border:2px solid #2f6df6;cursor:grab;pointer-events:auto;touch-action:none}
+
+/* ---------- Estado en vivo (sin simulador) ---------- */
+.modlist{margin:8px 0 12px;display:flex;flex-direction:column;gap:4px}
+.modrow{padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;color:var(--muted)}
+.modrow.warn{border-color:rgb(var(--warn));color:#ffd76a;background:rgba(var(--warn),.12)}
+.modrow.crit{border-color:rgb(var(--crit));color:#ff8a80;background:rgba(var(--crit),.14)}
+.modrow.ok{border-color:rgba(var(--ok),.4);color:#9be3a8}

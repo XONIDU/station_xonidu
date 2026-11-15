@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Module: Fire — Zone B</title>
+<style>
+  :root{--bg:#0b1220;--panel:#121a2b;--line:#24324d;--text:#e8eefc;--muted:#93a1bf;--ok:46,204,113;--warn:241,196,15;--crit:231,76,60}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,Segoe UI,Roboto,sans-serif;padding:18px}
+  h1{font-size:18px;margin:0 0 4px}
+  .id{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--muted);margin:0 0 12px}
+  .status{display:inline-block;padding:6px 14px;border-radius:20px;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+  .status.ok{color:rgb(var(--ok));border:1px solid rgb(var(--ok))}
+  .status.warn{color:rgb(var(--warn));border:1px solid rgb(var(--warn))}
+  .status.crit{color:rgb(var(--crit));border:1px solid rgb(var(--crit))}
+  .box{margin-top:16px;padding:26px;border:2px dashed var(--line);border-radius:12px;color:var(--muted);background:rgba(26,37,64,.4)}
+  ul.parts{margin:12px 0 0;padding-left:18px;color:var(--muted);font-size:13px}
+  a{color:#8cd8f5}
+  .back{display:inline-block;margin-top:16px;font-size:13px}
+</style>
+</head>
+<body>
+<h1>Module: Fire</h1>
+<p class="id">mod-b-fire &middot; Zone B</p>
+<span id="mStatus" class="status ok">Normal</span>
+
+<div id="missionBox"></div>
+<div id="metricsBox"></div>
+<a class="back" href="../index.html" target="_top">&larr; Volver a la zona</a>
+<script src="../../store.js?v=7"></script>
+<script src="../../missions.js?v=7"></script>
+<script src="../../module-screen.js?v=7"></script>
+<script>
+  renderModuleScreen(["mod-b-fire"], "Module: Fire", "Zone B");
+</script>
+</body>
+</html>

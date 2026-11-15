@@ -1,0 +1,285 @@
+/* ============ CONFIGURACIÓN (edita aquí) ============ */
+const CONFIG = {
+  image: "station.png",          // pon tu imagen en esta misma carpeta
+  storageKey: "station-zones-v2", // para recordar coordenadas editadas
+  showLabels: false,              // la imagen ya trae letras y nombres; ponlo en true si usas otro fondo
+  mapButton: { x:39.4, y:84.0, w:21.2, h:14.1 } // zona clicable sobre el botón MAP de la imagen (%)
+};
+
+// x, y, w, h en % de la imagen (0–100).
+// url: si pones una página (p. ej. "zona-a.html") el botón MAP navega ahí; si es null usa la vista interna.
+const ZONES = [
+  { id:"A", name:"Habitat & Services",       mods:["Habitabilidad","Salud","ECLSS","Incendios","Radiación"],                       x:8.1,  y:31.4, w:12.6, h:36.1, status:"ok", url:"../zone-a/index.html" },
+  { id:"B", name:"Laboratory & Crops",       mods:["Alimentos","Térmico","Energía","Incendios"],                                       x:22.4, y:31.4, w:12.6, h:36.1, status:"ok", url:"../zone-b/index.html" },
+  { id:"C", name:"Technical Compartment",    mods:["ECLSS","Energía","Térmico","Comando"],                                         x:36.6, y:31.4, w:12.6, h:36.1, status:"ok", url:"../zone-c/index.html" },
+  { id:"D", name:"Control & Observation",    mods:["Comando","Navegación","Comms","Robótica"],                                     x:50.8, y:31.4, w:12.6, h:36.1, status:"ok", url:"../zone-d/index.html" },
+  { id:"E", name:"Access Node & Airlock",    mods:["Estructura","Robótica/EVA","Incendios"],                                       x:65.0, y:31.4, w:12.5, h:36.1, status:"ok", url:"../zone-e/index.html" },
+  { id:"F", name:"Exterior Assembly",        mods:["Energía","Térmico","Comms","Ciencia","Estructura","Propulsión","Radiación"],   x:79.2, y:31.4, w:12.5, h:36.1, status:"ok", url:"../zone-f/index.html" }
+];
+
+/* ============ ALERTAS: parametro URL y estado guardado ============ */
+function readUrlAlert() {
+  const params = new URLSearchParams(location.search);
+  const zone = params.get("alert");
+  const level = params.get("level");
+  if (!zone || !/^[a-f]$/i.test(zone)) return;
+  if (level && ["ok", "warn", "crit"].includes(level)) stationStore.saveAlert(zone.toLowerCase(), level);
+  history.replaceState(null, document.title, location.pathname);
+}
+
+function alertedZones() {
+  // Solo el estado EN VIVO del store: la alerta guardada en localStorage
+  // quedaba obsoleta (tras reiniciar la partida el backend pone todo en ok,
+  // pero la alerta guardada seguia haciendo parpadear la zona en amarillo
+  // sin que hubiera ningun error real).
+  const out = new Set();
+  ZONES.forEach(z => { if (stationStore.getZoneStatus(z.id.toLowerCase()) !== "ok") out.add(z.id); });
+  return out;
+}
+
+// Nivel de parpadeo para una zona: usa el estado real de sus modulos si no es ok;
+// si todo esta ok pero hay una alerta guardada (parametro URL), usa ese nivel.
+function alertLevelFor(zoneId) {
+  // Solo el estado en vivo: si la zona esta ok, no parpadea aunque haya
+  // una alerta guardada vieja en localStorage.
+  return stationStore.getZoneStatus(String(zoneId).toLowerCase());
+}
+
+/* parpadeo del boton MAP del mapa segun cualquier alerta en la estacion */
+function updateMapButtonBlink() {
+  const level = stationStore.getAnyAlertStatus();
+  const hot = $("#mapHot"), btn = $("#mapBtn");
+  hot.classList.toggle("alert-warn", level === "warn");
+  hot.classList.toggle("alert-crit", level === "crit");
+  btn.classList.toggle("alert-warn", level === "warn");
+  btn.classList.toggle("alert-crit", level === "crit");
+}
+
+/* ============ ESTADO ============ */
+const $ = (s) => document.querySelector(s);
+const stage = $("#stage"), zonesEl = $("#zones"), bg = $("#bg");
+const STATUS_LABEL = { ok:"Normal", warn:"Anomalía", crit:"Crítico" };
+let selected = null;
+
+// Recupera coordenadas guardadas (si el navegador lo permite)
+try {
+  const saved = JSON.parse(localStorage.getItem(CONFIG.storageKey) || "null");
+  if (saved) {
+    saved.forEach(s => {
+      if (s.id === "MAP") {
+        const mb = CONFIG.mapButton;
+        Object.assign(mb, { x:+s.x, y:+s.y, w:+s.w, h:+s.h });
+      } else {
+        const z = ZONES.find(z => z.id === s.id);
+        if (z) Object.assign(z, {x:s.x,y:s.y,w:s.w,h:s.h});
+      }
+    });
+  }
+  // Aplicar coordenadas del botón MAP al DOM
+  const mb = CONFIG.mapButton;
+  const hot = $("#mapHot");
+  Object.assign(hot.style, { left:mb.x+"%", top:mb.y+"%", width:mb.w+"%", height:mb.h+"%" });
+} catch (e) {}
+
+/* ============ IMAGEN DE FONDO ============ */
+bg.onerror = () => stage.classList.add("no-bg");   // sin imagen: muestra fondo oscuro 16:9
+bg.src = CONFIG.image;
+
+/* ============ RENDER ============ */
+function render() {
+  zonesEl.innerHTML = "";
+  const alerted = alertedZones();
+  ZONES.forEach(z => {
+    const blinking = alerted.has(z.id);
+    const el = document.createElement("div");
+    el.className = `zone ${z.status}` + (selected === z.id ? " sel" : "") + (blinking ? ` blink-${alertLevelFor(z.id)}` : "");
+    el.dataset.id = z.id;
+    el.setAttribute("role", "button");
+    el.setAttribute("aria-label", `Zona ${z.id}: ${z.name}. Estado: ${STATUS_LABEL[z.status]}`);
+    el.tabIndex = 0;
+    Object.assign(el.style, { left:z.x+"%", top:z.y+"%", width:z.w+"%", height:z.h+"%" });
+    el.innerHTML = CONFIG.showLabels ? `<span class="tag">${z.id}</span><span class="name">${z.name}</span>` : "";
+    zonesEl.appendChild(el);
+  });
+  renderPanel();
+  updateMapButtonBlink();
+  ajustarZonasImagen();
+}
+
+function renderPanel() {
+  const z = ZONES.find(z => z.id === selected);
+  $("#hint").hidden = !!z;
+  $("#info").hidden = !z;
+  if (!z) return;
+  $("#zTitle").textContent = `Zona ${z.id} · ${z.name}`;
+  $("#zMods").textContent = "Módulos: " + z.mods.join(", ");
+  // Estado EN VIVO desde el store (backend + datos reales de la NASA).
+  // No hay botones manuales: el estado lo pone el backend, no el jugador.
+  const mods = stationStore.getZoneModules(z.id.toLowerCase());
+  const zs = stationStore.getZoneStatus(z.id.toLowerCase());
+  const label = { ok: "Normal", warn: "Anomalía", crit: "Crítico" }[zs] || zs;
+  $("#zStatus").textContent = `Estado en vivo: ${label}`;
+  const list = $("#zModList");
+  list.innerHTML = "";
+  mods.forEach(m => {
+    const row = document.createElement("div");
+    row.className = "modrow " + m.status;
+    const slug = m.moduleId.replace(/^mod-[a-f]-/, "");
+    row.textContent = `${slug}: ${m.status}`;
+    list.appendChild(row);
+  });
+}
+
+/* ============ SELECCIÓN ============ */
+function select(id) { selected = id; render(); }
+
+zonesEl.addEventListener("click", e => {
+  const el = e.target.closest(".zone"); if (!el) return;
+  const id = el.dataset.id;
+  const blinking = el.classList.contains("blink-warn") || el.classList.contains("blink-crit");
+  select(id);
+  if (blinking) {
+    // Navegar a la zona abriendo el modulo que esta en alerta (para que parpadee al entrar).
+    // Hacer clic en la zona NO atiende la falla: solo se atiende con clic en
+    // el modulo, dentro de la pagina de la zona.
+    const z = ZONES.find(z => z.id === id);
+    let url = z.url;
+    if (url) {
+      const mods = stationStore.getZoneModules(id.toLowerCase());
+      const alerted = mods.find(m => m.status !== "ok");
+      if (alerted) {
+        const slug = alerted.moduleId.replace(/^mod-[a-f]-/, "");
+        url += (url.includes("?") ? "&" : "?") + `mod=${slug}`;
+      }
+    }
+    setTimeout(() => { location.href = url; }, 0);
+    return;
+  }
+});
+zonesEl.addEventListener("keydown", e => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("zone")) { e.preventDefault(); select(e.target.dataset.id); }
+});
+
+/* ============ BOTÓN MAP: confirmar e ir a la sección ============ */
+function goMap() {
+  const z = ZONES.find(z => z.id === selected);
+  if (!z) { toast("Selecciona primero una zona"); return; }
+  if (z.url) location.href = z.url;
+  else location.hash = "zona-" + z.id.toLowerCase();
+}
+$("#mapBtn").addEventListener("click", goMap);
+
+// Zona clicable sobre el botón MAP dibujado en la imagen
+const hot = $("#mapHot"), mb = CONFIG.mapButton;
+Object.assign(hot.style, { left:mb.x+"%", top:mb.y+"%", width:mb.w+"%", height:mb.h+"%" });
+hot.addEventListener("click", goMap);
+
+let toastT;
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 1600);
+}
+function route() {
+  const m = location.hash.match(/^#zona-([a-f])$/i);
+  const z = m && ZONES.find(z => z.id === m[1].toUpperCase());
+  $("#detail").hidden = !z;
+  if (z) { $("#dTitle").textContent = `Zona ${z.id} · ${z.name}`; $("#dMods").textContent = "Módulos: " + z.mods.join(", "); }
+}
+window.addEventListener("hashchange", route);
+$("#backBtn").addEventListener("click", () => { location.hash = ""; });
+document.addEventListener("keydown", e => { if (e.key === "Escape") location.hash = ""; });
+
+window.addEventListener("station:modulestatuschange", () => {
+  render();
+  updateMapButtonBlink();
+});
+
+readUrlAlert();
+updateMapButtonBlink();
+render(); route();
+
+/* ============ AJUSTE DE ZONAS CON OBJECT-FIT:CONTAIN ============ */
+// Cuando la imagen usa contain, puede dejar espacios en los lados.
+// Mapeamos las coordenadas de zona (0-100% sobre la imagen) al stage real.
+function ajustarZonasImagen() {
+  const img = $("#bg");
+  const stage = $("#stage");
+  if (!img.complete || img.naturalWidth === 0) return;
+  const sr = stage.getBoundingClientRect();
+  const ir = img.getBoundingClientRect();
+  // Posicion y tamano de la imagen mostrada dentro del stage (en % del stage)
+  const imgLeftPct = ((ir.left - sr.left) / sr.width) * 100;
+  const imgTopPct = ((ir.top - sr.top) / sr.height) * 100;
+  const imgWpct = (ir.width / sr.width) * 100;
+  const imgHpct = (ir.height / sr.height) * 100;
+  ZONES.forEach(z => {
+    const el = zonesEl.querySelector(`[data-id="${z.id}"]`);
+    if (!el) return;
+    const x = imgLeftPct + (z.x / 100) * imgWpct;
+    const y = imgTopPct + (z.y / 100) * imgHpct;
+    const w = (z.w / 100) * imgWpct;
+    const h = (z.h / 100) * imgHpct;
+    Object.assign(el.style, { left:x+"%", top:y+"%", width:w+"%", height:h+"%" });
+  });
+  // El botón MAP también se remapea: antes quedaba con las coordenadas
+  // crudas de la imagen y se desalineaba cuando había letterboxing.
+  const mb = CONFIG.mapButton, hot = $("#mapHot");
+  Object.assign(hot.style, {
+    left: (imgLeftPct + (mb.x / 100) * imgWpct) + "%",
+    top: (imgTopPct + (mb.y / 100) * imgHpct) + "%",
+    width: ((mb.w / 100) * imgWpct) + "%",
+    height: ((mb.h / 100) * imgHpct) + "%"
+  });
+}
+// Ejecutar despues de render y cuando la imagen cargue
+bg.addEventListener("load", () => { ajustarZonasImagen(); });
+// Si la imagen ya estaba en caché, el load puede haber ocurrido antes
+// de registrar el listener: ajustar de inmediato en ese caso.
+if (bg.complete && bg.naturalWidth) ajustarZonasImagen();
+window.addEventListener("resize", ajustarZonasImagen);
+
+/* ============ RELOJ DE MISIÓN (día X/5 en la cabecera) ============ */
+// La misión arranca con START MISSION en el menú (POST /api/mission/start).
+// Aquí solo se muestra: día actual, duración total y si ya terminó.
+function syncMissionDay() {
+  const el = document.getElementById("missionDay");
+  if (!el) return;
+  fetch("/api/mission").then(r => r.ok ? r.json() : null).then(d => {
+    const m = d && d.mission;
+    if (!m || !m.active) { el.textContent = ""; el.style.display = "none"; return; }
+    el.style.display = "";
+    if (m.finished) {
+      el.textContent = "Misión completada · " + m.days_total + " días";
+      el.classList.add("finished");
+    } else {
+      el.textContent = "Día " + m.day + "/" + m.days_total + " · " + m.difficulty;
+      el.classList.remove("finished");
+    }
+  }).catch(() => { /* sin backend: no se muestra el reloj */ });
+}
+syncMissionDay();
+setInterval(syncMissionDay, 30000);
+
+/* ============ REINICIAR PARTIDA / SALIR AL MENÚ ============ */
+// Reiniciar: vuelve a lanzar la misma misión desde el Día 1 (POST
+// /api/mission/start con la configuración actual; el backend además limpia
+// los módulos atendidos y los eventos aplicados, y los eventos NASA que
+// sigan activos se vuelven a aplicar en el próximo poll).
+document.getElementById("restartBtn").addEventListener("click", async () => {
+  if (!confirm("¿Reiniciar la partida? El reloj vuelve al Día 1 y las anomalías activas se vuelven a aplicar.")) return;
+  let cfg = {};
+  try { cfg = JSON.parse(localStorage.getItem("xonidu-mission-v1") || "{}") || {}; } catch (e) {}
+  const difficulty = localStorage.getItem("xonidu-difficulty-v1") || "medio";
+  const days = parseInt(localStorage.getItem("xonidu-mission-days") || "5", 10) || 5;
+  try {
+    await fetch("/api/mission/start", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ objetivo: cfg.objetivo, orbita: cfg.orbita, lanzador: cfg.lanzador, difficulty, days }) });
+  } catch (e) { /* sin backend: recargar igual */ }
+  location.reload();
+});
+// Salir al menú: ahí se elige otra misión o dificultad (el menú limpia la
+// sesión al entrar, así que hay que iniciar la misión desde ahí).
+document.getElementById("menuBtn").addEventListener("click", () => {
+  location.href = "../menu/index.html";
+});

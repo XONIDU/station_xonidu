@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>XONIDU Station — Space Mission Design Game</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="stage" class="stage">
+    <img id="bg" src="menu.png" alt="XONIDU Station — Space Mission Design Game">
+
+    <!-- Botones sobre la imagen (las posiciones están en app.js) -->
+    <nav id="buttons" class="buttons" aria-label="Main menu"></nav>
+
+    <!-- Botón idioma (arriba a la izquierda). -->
+    <button id="langBtn" class="lang-top-btn" type="button" aria-label="Elegir idioma">Idioma</button>
+
+    <!-- Botones arriba a la derecha (HTML, fuera de la imagen): Métricas y Dificultad.
+         Son la UNICA parte editable del juego final: la configuracion vive en el menu. -->
+    <div class="top-right-btns">
+      <button id="metricsTopBtn" class="metrics-top-btn" type="button" aria-label="Metrics, algorithms and equations">⚙ Métricas</button>
+      <button id="diffTopBtn" class="diff-top-btn" type="button" aria-label="Elegir dificultad">🎮 Dificultad</button>
+    </div>
+
+    <!-- Barra inferior: SCORE · MASS · POWER · BUDGET · DATA -->
+    <div id="hud" class="hud" aria-label="Mission status"></div>
+
+    <div id="toast" class="toast" role="status"></div>
+  </main>
+
+  <!-- Vista interna para los botones que aún no tienen página propia -->
+  <section id="detail" class="detail" hidden>
+    <div class="card">
+      <h2 id="dTitle"></h2>
+      <p id="dText"></p>
+      <button id="backBtn" type="button">← Back</button>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

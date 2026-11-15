@@ -1,0 +1,119 @@
+:root{
+  --bg:#0b1220; --panel:#121a2b; --line:#24324d; --text:#e8eefc; --muted:#93a1bf;
+  --ok:46,204,113; --warn:241,196,15; --crit:231,76,60;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+.bar{display:flex;align-items:center;gap:16px;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.bar h1{font-size:17px;margin:0;flex:1}
+.legend{display:flex;gap:14px;color:var(--muted);font-size:13px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+.dot.ok{background:rgb(var(--ok))}.dot.warn{background:rgb(var(--warn))}.dot.crit{background:rgb(var(--crit))}
+
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;padding:16px;align-items:start}
+@media(max-width:820px){.layout{grid-template-columns:minmax(0,1fr)}}
+
+/* ---------- Imagen + zonas ---------- */
+.stage{position:relative;width:100%;min-width:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;
+  background:radial-gradient(circle at 30% 20%,#17233d,#0a0f1c)}
+.stage img{display:block;width:100%;height:auto}
+.stage.no-bg{aspect-ratio:16/9}
+.stage.no-bg img{display:none}
+.zones{position:absolute;inset:0}
+
+.zone{position:absolute;border:2px solid rgba(var(--c),.85);background:rgba(var(--c),.28);
+  border-radius:14px;cursor:pointer;color:#fff;padding:0;transition:background .2s,box-shadow .2s;touch-action:none}
+.zone:hover{background:rgba(var(--c),.40)}
+.zone.ok{--c:var(--ok)}
+.zone.warn{--c:var(--warn);background:rgba(var(--c),.34)}
+.zone.crit{--c:var(--crit);background:rgba(var(--c),.40);animation:pulse 1.2s infinite}
+.zone.sel{outline:3px solid #fff;outline-offset:2px}
+.zone .tag{position:absolute;left:6px;top:4px;font-weight:700;font-size:clamp(14px,2.4vw,26px);
+  text-shadow:0 1px 4px #000;pointer-events:none}
+.zone .name{position:absolute;left:6px;bottom:4px;right:6px;font-size:clamp(9px,1.2vw,12px);
+  text-align:left;text-shadow:0 1px 3px #000;pointer-events:none}
+@keyframes pulse{50%{box-shadow:0 0 18px 4px rgba(var(--crit),.7)}}
+
+
+/* ---------- Panel ---------- */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.panel h2{margin:0 0 4px;font-size:16px}
+.panel h3{margin:14px 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted);margin:4px 0}
+button{font:inherit;color:var(--text);border:1px solid var(--line);background:#1a2540;border-radius:8px;
+  padding:8px 12px;cursor:pointer}
+button:hover{filter:brightness(1.15)}
+.ghost{background:transparent}
+.primary{width:100%;margin-top:14px;padding:12px;font-weight:700;background:#2f6df6;border-color:#2f6df6}
+.seg{display:flex;gap:6px}
+.seg button{flex:1;padding:8px 4px}
+.seg .ok{border-color:rgb(var(--ok))}.seg .warn{border-color:rgb(var(--warn))}.seg .crit{border-color:rgb(var(--crit))}
+.seg button.on.ok{background:rgba(var(--ok),.35)}
+.seg button.on.warn{background:rgba(var(--warn),.35)}
+.seg button.on.crit{background:rgba(var(--crit),.4)}
+
+/* ---------- Vista de sección ---------- */
+.detail{position:fixed;inset:0;background:rgba(5,8,16,.85);display:grid;place-items:center;padding:16px;z-index:10}
+.detail[hidden]{display:none}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;max-width:560px;width:100%}
+
+/* ---------- Botón MAP sobre la imagen ---------- */
+.maphot{position:absolute;background:transparent;border:2px solid transparent;border-radius:16px;padding:0;cursor:pointer}
+.maphot:hover,.maphot:focus-visible{border-color:rgba(120,220,255,.9);box-shadow:0 0 18px rgba(80,200,255,.55);filter:none}
+.toast{position:absolute;left:50%;top:6%;transform:translateX(-50%);background:rgba(8,14,28,.92);border:1px solid var(--line);
+  padding:8px 14px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+
+/* ---------- Formas poligonales (zona-b.html) ---------- */
+.shapes{position:absolute;inset:0;width:100%;height:100%}
+.poly{fill:rgba(var(--c),.30);stroke:rgba(var(--c),.95);stroke-width:3;vector-effect:non-scaling-stroke;
+  stroke-linejoin:round;cursor:pointer;transition:fill .2s;outline:none}
+.poly.ok{--c:var(--ok)}
+.poly.warn{--c:var(--warn);fill:rgba(var(--c),.36);animation:polypulseWarn 1.2s infinite}
+.poly.crit{--c:var(--crit);fill:rgba(var(--c),.42);animation:polypulseCrit .5s infinite}
+.poly:hover,.poly:focus-visible{fill:rgba(var(--c),.45)}
+.poly.sel{stroke:#fff;stroke-width:4}
+/* Etiqueta de estado en vivo sobre cada monitor (interfaz del modulo):
+   cada monitor muestra su propio estado. Solo el que falla se ve en
+   amarillo/rojo y parpadea; los demas quedan en verde tenue. */
+.poly-label{font:700 2.4px system-ui,sans-serif;fill:#e8eefc;pointer-events:none;
+  paint-order:stroke;stroke:rgba(5,8,16,.85);stroke-width:.5px}
+.poly-label.ok{fill:#2ecc71;opacity:.7}
+.poly-label.warn{fill:#f1c40f;animation:polypulseWarn 1.2s infinite}
+.poly-label.crit{fill:#e74c3c;animation:polypulseCrit .5s infinite}
+.poly-label-name{font-size:1.6px;fill:#cfe3ff;opacity:.95}
+.poly-label-live{font-size:1.5px;fill:#7ff3ff;opacity:.95}
+.poly-label-status{font-size:2.4px}
+
+@keyframes polypulseWarn{50%{fill:rgba(var(--warn),.18);stroke:rgba(var(--warn),.55)}}
+@keyframes polypulseCrit{50%{fill:rgba(var(--crit),.15);stroke:rgba(var(--crit),.55)}}
+/* Solo el modulo que falla se enciende: cada poligono usa SU propio estado
+   (.poly.warn/.poly.crit). No hay parpadeo global de los monitores. */
+
+/* ---------- Boton MAP con alerta ---------- */
+#mapBtn.alert-warn{border-color:rgb(var(--warn));background:rgba(241,196,15,.15);animation:mapBtnPulseWarn 1.2s infinite}
+#mapBtn.alert-crit{border-color:rgb(var(--crit));background:rgba(231,76,60,.2);animation:mapBtnPulseCrit .5s infinite}
+.maphot.alert-warn{border-color:rgba(241,196,15,.9);animation:mapHotPulseWarn 1.2s infinite}
+.maphot.alert-crit{border-color:rgba(231,76,60,.9);animation:mapHotPulseCrit .5s infinite}
+@keyframes mapBtnPulseWarn{50%{box-shadow:0 0 20px 8px rgba(241,196,15,.75);background:rgba(241,196,15,.3)}}
+@keyframes mapBtnPulseCrit{50%{box-shadow:0 0 20px 8px rgba(231,76,60,.85);background:rgba(231,76,60,.35)}}
+@keyframes mapHotPulseWarn{50%{box-shadow:0 0 20px 8px rgba(241,196,15,.75)}}
+@keyframes mapHotPulseCrit{50%{box-shadow:0 0 20px 8px rgba(231,76,60,.85)}}
+
+/* ---------- Pantalla expandida del modulo ---------- */
+.module-screen{position:fixed;inset:0;background:rgba(5,8,16,.92);display:grid;place-items:center;padding:16px;z-index:50;outline:none}
+.module-screen[hidden]{display:none}
+.module-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:24px 28px;max-width:520px;width:100%;text-align:center;position:relative}
+.module-exit{position:absolute;top:14px;right:16px;background:transparent;border:2px solid var(--line);color:var(--text);width:40px;height:40px;border-radius:50%;font-size:24px;line-height:normal;cursor:pointer}
+.module-exit:hover{background:rgba(var(--crit),.2);border-color:rgb(var(--crit))}
+.module-id{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:13px;color:var(--muted);margin:6px 0 14px;word-break:break-all}
+.module-status{display:inline-block;padding:6px 14px;border-radius:20px;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:18px}
+.module-status.ok{color:rgb(var(--ok));border:1px solid rgb(var(--ok))}
+.module-status.warn{color:rgb(var(--warn));border:1px solid rgb(var(--warn))}
+.module-status.crit{color:rgb(var(--crit));border:1px solid rgb(var(--crit))}
+.module-status.blink-warn{animation:modBlinkWarn 1.2s infinite}
+.module-status.blink-crit{animation:modBlinkCrit .5s infinite}
+#moduleFrame{width:100%;height:300px;border:1px solid var(--line);border-radius:8px;background:#0b1220;margin-top:6px}
+@keyframes modBlinkWarn{50%{opacity:.4;box-shadow:0 0 12px 4px rgba(241,196,15,.75)}}
+@keyframes modBlinkCrit{50%{opacity:.4;box-shadow:0 0 12px 4px rgba(231,76,60,.85)}}
+.sim-placeholder{margin-top:26px;padding:30px;border:2px dashed var(--line);border-radius:12px;color:var(--muted);font-size:15px;background:rgba(26,37,64,.4)}

@@ -1,0 +1,6 @@
+# XONIDU Station — backend (station-backend.py)
+# Instalar con: pip install -r requirements.txt
+# Solo stdlib + websockets. Supabase es opcional: solo se usa si hay
+# SUPABASE_URL y SUPABASE_KEY en el entorno (ver db/esquema_supabase.sql).
+websockets
+supabase
