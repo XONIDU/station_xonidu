@@ -83,6 +83,11 @@ WS_PORT = 5001
 # Estado compartido de la estacion
 # ---------------------------------------------------------------------------
 STATE = {
+    # v19: "reinforced" = modulos reforzados (lista "zona.slug") y
+    # "warn_since" = cuando paso cada modulo a warn (ISO). El frontend
+    # los usa para mostrar el escudo 🛡 y la cuenta atras de escalado.
+    "reinforced": [],
+    "warn_since": {},
     "zonas": {z: "ok" for z in "ABCDEF"},
     "modulos": {
         "a": {"habitability": "ok", "health": "ok", "eclss": "ok", "fire": "ok", "radiation": "ok"},
@@ -113,7 +118,7 @@ DEFAULT_GAME_CONFIG = {
     "kp_crit": 7,            # Kp >= 7 -> radiacion crit
     "cme_speed_warn": 350,   # km/s: CME mas rapida -> energia warn
     "event_fresh_hours": 96, # antiguedad maxima de un evento FLR/CME para aplicarlo
-    "attend_window_min": 5,  # minutos en warn sin atender antes de escalar a crit
+    "attend_window_sec": 20,  # v19: SEGUNDOS en warn sin atender antes de escalar a crit (facil 30, medio 20, dificil 15)
     # Scoring de mision (lo calcula el menu)
     "score_base": 100,
     "orbit_fit": 20, "orbit_miss": -15,
@@ -136,13 +141,13 @@ CONFIG_PATH = Path(__file__).resolve().parent / "game_config.json"
 # y menos tiempo para atenderlas antes de que escalen a crit.
 DIFFICULTY_PRESETS = {
     "facil":   {"mission_days": 5, "min_per_day": 1, "kp_warn": 5, "kp_crit": 7,
-                "cme_speed_warn": 350, "flr_min_class": "M", "attend_window_min": 10,
+                "cme_speed_warn": 350, "flr_min_class": "M", "attend_window_sec": 30,
                 "event_fresh_hours": 24},
     "medio":   {"mission_days": 5, "min_per_day": 2, "kp_warn": 5, "kp_crit": 7,
-                "cme_speed_warn": 350, "flr_min_class": "M", "attend_window_min": 5,
+                "cme_speed_warn": 350, "flr_min_class": "M", "attend_window_sec": 20,
                 "event_fresh_hours": 96},
     "dificil": {"mission_days": 5, "min_per_day": 3, "kp_warn": 4, "kp_crit": 6,
-                "cme_speed_warn": 300, "flr_min_class": "C", "attend_window_min": 2,
+                "cme_speed_warn": 300, "flr_min_class": "C", "attend_window_sec": 15,
                 "event_fresh_hours": 120},
 }
 
@@ -169,7 +174,7 @@ MISSION = {"active": False, "start": None, "difficulty": "medio",
 # Estadisticas de la partida para el score final (v13): reparaciones
 # completadas (el jugador atendio un modulo en warn/crit) y modulos que
 # llegaron a crit. Se reinician en cada POST /api/mission/start.
-MISSION_STATS = {"repairs": 0, "crits": 0, "penalties": 0}
+MISSION_STATS = {"repairs": 0, "crits": 0, "penalties": 0, "drain": 0}
 # Modulos reforzados (v15): un modulo reforzado tarda el DOBLE en escalar
 # de warn a crit (el jugador se preparo para la falla).
 REINFORCED = set()
@@ -205,6 +210,10 @@ def mission_score():
     # Penalizaciones (v15): -10 por cada opcion mal elegida en el
     # diagnostico. Cuentan siempre, no solo al terminar.
     penalties = -10 * int(MISSION_STATS.get("penalties", 0))
+    # Drenaje (v19): mientras un modulo esta en crit sin atender, el
+    # score baja 5 pts por modulo y por minuto (cada poll). Es la
+    # consecuencia de dejar una falla critica sin atender.
+    drain = -5 * int(MISSION_STATS.get("drain", 0))
     # Combustible (v14): si la mision necesitaba combustible y se agoto
     # antes de terminar, -20. Solo cuenta cuando la mision termino.
     fuel = 0
@@ -216,11 +225,12 @@ def mission_score():
             fuel = -20
     return {"fit": fit, "complete": complete, "repairs": repairs,
             "crits": crits, "data": data, "fuel": fuel,
-            "penalties": penalties,
-            "total": fit + complete + repairs + crits + data + fuel + penalties,
+            "penalties": penalties, "drain": drain,
+            "total": fit + complete + repairs + crits + data + fuel + penalties + drain,
             "n_repairs": int(MISSION_STATS.get("repairs", 0)),
             "n_crits": int(MISSION_STATS.get("crits", 0)),
-            "n_penalties": int(MISSION_STATS.get("penalties", 0))}
+            "n_penalties": int(MISSION_STATS.get("penalties", 0)),
+            "n_drain": int(MISSION_STATS.get("drain", 0))}
 
 
 def mission_status():
@@ -239,6 +249,24 @@ def mission_status():
     elapsed = (_utcnow() - MISSION["start"]).total_seconds() / 60.0
     day = int(elapsed // MISSION["min_per_day"]) + 1
     finished = day > MISSION["days"]
+    # v19: MISION FALLIDA (game over) — si 6 o mas modulos estan en crit
+    # a la vez, la estacion es inoperable; o si el score llego a 0 o menos
+    # (el drenaje de las criticas lo agoto). La mision termina antes de
+    # tiempo y la pantalla de fin muestra "Misión fallida".
+    failed = False
+    if MISSION["active"] and not finished:
+        n_crit = sum(1 for mods in STATE["modulos"].values() for v in mods.values() if v == "crit")
+        if n_crit >= 6:
+            failed = True
+            MISSION["failed"] = True
+            print(f"[mision] FALLIDA: {n_crit} modulos en crit (estacion inoperable)")
+        elif mission_score()["total"] <= 0 and (MISSION.get("fit_score") or 0) > 0:
+            failed = True
+            MISSION["failed"] = True
+            print("[mision] FALLIDA: el score llego a 0 (drenaje de criticas)")
+    if MISSION.get("failed"):
+        failed = True
+        finished = True
     # Combustible restante (v14): se gasta con los dias de mision.
     # (dias transcurridos = minutos / minutos por dia, sin tope: el
     # combustible solo baja, nunca sube al cambiar de dia.)
@@ -251,7 +279,7 @@ def mission_status():
             "min_per_day": MISSION["min_per_day"],
             "minutes_elapsed": round(elapsed, 1), "minutes_total": total,
             "minutes_left": round(max(0.0, total - elapsed), 1),
-            "finished": finished, "objetivo": MISSION["objetivo"],
+            "finished": finished, "failed": failed, "objetivo": MISSION["objetivo"],
             "orbita": MISSION["orbita"], "lanzador": MISSION["lanzador"],
             "fuel": {"capacity": cap, "burn_per_day": burn,
                      "remaining": round(fuel_remaining, 1),
@@ -318,10 +346,13 @@ def _set_module_state(zona, slug, nivel):
             pass
     if nivel == "warn":
         WARN_SINCE.setdefault(key, _utcnow())
+        STATE["warn_since"][key] = WARN_SINCE[key].isoformat()
     elif nivel == "ok":
         WARN_SINCE.pop(key, None)
+        STATE["warn_since"].pop(key, None)
         # Al reparar, el refuerzo se gasta (hay que volver a reforzar).
         REINFORCED.discard(key)
+        STATE["reinforced"] = sorted(REINFORCED)
     return True
 
 
@@ -343,9 +374,12 @@ def _is_fresh(ts, hours):
 
 
 def _escalate_unattended():
-    """Un modulo en warn que nadie atiende en attend_window_min pasa a crit.
-    Si el modulo esta REFORZADO (v15), tarda el DOBLE: el jugador se preparo."""
-    window = GAME_CONFIG.get("attend_window_min", 5)
+    """Un modulo en warn que nadie atiende en attend_window_sec pasa a crit.
+    v19: la ventana es de SEGUNDOS (facil 30, medio 20, dificil 15) — si
+    pasa ese tiempo sin atender, la falla escala a crit, parpadea en rojo
+    y empieza a drenar puntos. Si el modulo esta REFORZADO (v15), tarda
+    el DOBLE: el jugador se preparo."""
+    window = GAME_CONFIG.get("attend_window_sec", GAME_CONFIG.get("attend_window_min", 5) * 60)
     now = _utcnow()
     for zona, mods in STATE["modulos"].items():
         for slug, nivel in mods.items():
@@ -354,9 +388,9 @@ def _escalate_unattended():
             key = f"{zona}.{slug}"
             w = window * 2 if key in REINFORCED else window
             since = WARN_SINCE.get(key)
-            if since and (now - since).total_seconds() >= w * 60:
+            if since and (now - since).total_seconds() >= w:
                 _set_module_state(zona, slug, "crit")
-                print(f"[NASA] Escalado {zona}.{slug} warn -> crit (sin atender {w} min)")
+                print(f"[NASA] Escalado {zona}.{slug} warn -> crit (sin atender {w} s)")
 
 # ---------------------------------------------------------------------------
 # Proxy de APIs de la NASA (llave oculta, caché breve)
@@ -1028,6 +1062,16 @@ def procesar_eventos_nasa():
 
     # --- Escalado por no atender ---
     _escalate_unattended()
+    # v19: drenaje — cada modulo en crit sin atender resta 5 pts por minuto
+    # (cada poll). Es la consecuencia de dejar una falla critica.
+    try:
+        n_crit = sum(1 for mods in STATE["modulos"].values() for v in mods.values() if v == "crit")
+        if n_crit and MISSION.get("active"):
+            MISSION_STATS["drain"] = int(MISSION_STATS.get("drain", 0)) + n_crit
+            if n_crit:
+                print(f"[NASA] Drenaje: {n_crit} modulo(s) en crit -> -{5 * n_crit} pts/min")
+    except Exception:
+        pass
 
     broadcast_state()
     supabase_sync_modulos()
@@ -1062,6 +1106,34 @@ def iniciar_nasa_polling(interval_seconds: int = 60):
     )
     NASA_POLLING_THREAD.start()
     print(f"[NASA Polling] Iniciado (intervalo: {interval_seconds}s)")
+
+
+# v19: hilo de escalado cada 5 s — el escalado es de 15-30 s y no puede
+# esperar al poll de la NASA (60 s), o la cuenta atras que ve el jugador
+# mentiria (el modulo seguiria en warn mucho mas de 15 s). El drenaje
+# (-5 pts por modulo en crit por minuto) vive en el poll de 60 s, no aqui.
+ESCALATION_ACTIVE = False
+ESCALATION_THREAD = None
+
+
+def escalation_loop():
+    global ESCALATION_ACTIVE
+    while ESCALATION_ACTIVE:
+        try:
+            _escalate_unattended()
+        except Exception as e:
+            print(f"[Escalation] Error: {e}")
+        time.sleep(5)
+
+
+def iniciar_escalation():
+    global ESCALATION_ACTIVE, ESCALATION_THREAD
+    if ESCALATION_ACTIVE:
+        return
+    ESCALATION_ACTIVE = True
+    ESCALATION_THREAD = threading.Thread(target=escalation_loop, daemon=True)
+    ESCALATION_THREAD.start()
+    print("[Escalation] Iniciado (cada 5 s)")
 
 
 def detener_nasa_polling():
@@ -1301,6 +1373,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 comps = {}
             prop_id = str(comps.get("propulsion") or "NONE").upper()
             fuel_cap, fuel_burn = PROPULSION_FUEL.get(prop_id, (0, 0))
+            MISSION["failed"] = False
             MISSION.update({"active": True, "start": _utcnow(),
                             "difficulty": str(data.get("difficulty") or GAME_CONFIG.get("difficulty", "medio")),
                             "days": days, "min_per_day": min_per_day,
@@ -1323,6 +1396,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             ATTENDED.clear()
             EVENT_STATE.clear()
             WARN_SINCE.clear()
+            REINFORCED.clear()
+            STATE["reinforced"] = []
+            STATE["warn_since"] = {}
             KP_EPISODE = None
             for zona_mods in STATE["modulos"].values():
                 for slug in zona_mods:
@@ -1351,6 +1427,40 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             # "Datos NASA" del menu; tambien existe en GET).
             resultados = procesar_eventos_nasa()
             body = json.dumps({"ok": True, "resultados": resultados}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if parsed == "/api/module":
+            # Cambiar el estado de un modulo por HTTP (v17: lo mismo que
+            # el mensaje WS set_module; lo usa el store cuando no hay WS,
+            # por ejemplo al entrar por el tunel de Cloudflare, que no
+            # pasa el puerto 5001 del WebSocket).
+            data = self._json_body()
+            zona = str(data.get("zona", "")).lower()
+            modulo = str(data.get("modulo", "")).lower()
+            status = str(data.get("status", "")).lower()
+            if (zona in STATE["modulos"]
+                    and modulo in STATE["modulos"][zona]
+                    and status in VALID_STATUSES):
+                prev = STATE["modulos"][zona][modulo]
+                _set_module_state(zona, modulo, status)
+                key = f"{zona}.{modulo}"
+                if status == "ok" and prev in ("warn", "crit"):
+                    try:
+                        MISSION_STATS["repairs"] = int(MISSION_STATS.get("repairs", 0)) + 1
+                    except Exception:
+                        pass
+                if status == "ok":
+                    ATTENDED.add(key)
+                broadcast_state()
+                body = json.dumps({"ok": True, "zona": zona, "modulo": modulo,
+                                   "status": status}).encode()
+            else:
+                body = json.dumps({"ok": False, "error": "modulo o estado invalido"}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -1481,6 +1591,7 @@ async def handle_ws_message(msg, sender):
         modulo = msg.get("modulo", "").lower()
         if zona in STATE["modulos"] and modulo in STATE["modulos"][zona]:
             REINFORCED.add(f"{zona}.{modulo}")
+            STATE["reinforced"] = sorted(REINFORCED)
             print(f"[WS] Modulo {zona}.{modulo} reforzado (doble tiempo)")
             broadcast_state()
     elif mtype == "get_state":
@@ -1591,6 +1702,7 @@ def main():
 
     # Hilo de polling periodico de APIs de la NASA
     iniciar_nasa_polling(interval_seconds=60)
+    iniciar_escalation()
 
     # Esperar un poco a que ambos servidores esten listos antes de abrir el tunel
     time.sleep(1)

@@ -86,6 +86,28 @@ bg.onerror = () => stage.classList.add("no-bg");   // sin imagen: muestra fondo 
 bg.src = CONFIG.image;
 
 /* ============ RENDER ============ */
+// v19: rejilla de zonas para MOVIL — 6 botones grandes con el estado.
+function renderZoneGrid() {
+  const grid = document.getElementById("zoneGrid");
+  if (!grid) return;
+  grid.innerHTML = "";
+  ZONES.forEach(z => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "zone-grid-btn " + (z.status || "ok") + (selected === z.id ? " sel" : "");
+    b.dataset.id = z.id;
+    const letter = document.createElement("span");
+    letter.className = "zg-letter";
+    letter.textContent = z.id;
+    const name = document.createElement("span");
+    name.className = "zg-name";
+    name.textContent = z.name;
+    b.appendChild(letter);
+    b.appendChild(name);
+    b.addEventListener("click", () => { select(z.id); });
+    grid.appendChild(b);
+  });
+}
 function render() {
   zonesEl.innerHTML = "";
   const alerted = alertedZones();
@@ -102,6 +124,7 @@ function render() {
     zonesEl.appendChild(el);
   });
   renderPanel();
+  renderZoneGrid();
   updateMapButtonBlink();
   ajustarZonasImagen();
 }
@@ -254,6 +277,18 @@ function showEndScreen(m) {
   const sec = document.getElementById("endScreen");
   if (!sec) return;
   const s = m.score || {};
+  // v19: MISION FALLIDA (game over) — 6+ modulos en crit o score a 0.
+  // El titulo cambia a rojo y explica por que se acabo el juego.
+  const titleEl = document.getElementById("endTitle");
+  if (titleEl) {
+    if (m.failed) {
+      titleEl.textContent = "Misión fallida";
+      titleEl.style.color = "#e74c3c";
+    } else {
+      titleEl.textContent = "Misión completada";
+      titleEl.style.color = "";
+    }
+  }
   document.getElementById("endMission").textContent =
     (m.objetivo || "Misión") + " · " + m.days_total + " días · " + m.difficulty;
   const row = (label, val) =>
@@ -265,6 +300,8 @@ function showEndScreen(m) {
     + row("Módulos en crítico (" + (s.n_crits || 0) + " × −50)", (s.crits || 0) + " pts")
     + row("Datos científicos (DATA)", "+" + (s.data || 0) + " pts")
     + row("Combustible (se agotó antes de terminar)", (s.fuel || 0) + " pts")
+    + (s.drain ? row("Drenaje (módulos en crítico sin atender)", (s.drain || 0) + " pts") : "")
+    + (m.failed ? row("La estación quedó inoperable", "—") : "")
     + '<div class="row total"><span>SCORE TOTAL</span><span>' + (s.total || 0) + " pts</span></div>";
   const fuel = m.fuel || {};
   if (fuel.capacity) {
@@ -291,7 +328,7 @@ function renderClock() {
   if (!el || !clk || !_lastMission) return;
   var m = _lastMission;
   if (m.finished) {
-    el.textContent = "Misión completada · " + m.days_total + " días · " + fmtHM(m.minutes_total);
+    el.textContent = (m.failed ? "Misión fallida · " : "Misión completada · ") + m.days_total + " días · " + fmtHM(m.minutes_total);
     el.classList.add("finished");
     clk.textContent = "";
     clk.style.display = "none";

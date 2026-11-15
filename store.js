@@ -12,7 +12,12 @@ const ALERT_KEY = "station-alert-v1";
 const STATUS_RANK = { ok: 0, pre: 1, warn: 2, crit: 3 };
 
 // Backend: si está disponible, se usa como fuente de verdad compartida.
-let BACKEND_URL = "http://localhost:5000";
+// v17 (tunel): MISMO ORIGEN, sin localhost. Antes BACKEND_URL era
+// "http://localhost:5000": en tu maquina funcionaba, pero para quien
+// entra por el tunel de Cloudflare, "localhost" es SU maquina (ahi no
+// hay juego) y las anomalias no cargaban. Con window.location.origin
+// las llamadas van por la misma direccion de la pagina (tunel o local).
+let BACKEND_URL = (typeof window !== "undefined" && window.location && window.location.origin) ? window.location.origin : "http://localhost:5000";
 let USE_BACKEND = false;
 let WS = null;
 let WS_RECONNECT_TIMER = null;
@@ -120,10 +125,28 @@ async function fetchFromBackend(path) {
   }
 }
 
+// v19: modulos reforzados (escudo 🛡) y cuando paso cada uno a warn,
+// segun el backend. Las zonas los usan para mostrar el escudo y la
+// cuenta atras de escalado (15-30 s sin atender -> crit).
+let REINFORCED_SET = new Set();
+let WARN_SINCE_MAP = {};
+function isReinforced(moduleId) {
+  const zone = zoneOf(moduleId);
+  const slug = moduleId.replace(/^mod-[a-f]-/, "");
+  return REINFORCED_SET.has(zone + "." + slug);
+}
+function getWarnSince(moduleId) {
+  const zone = zoneOf(moduleId);
+  const slug = moduleId.replace(/^mod-[a-f]-/, "");
+  return WARN_SINCE_MAP[zone + "." + slug] || null;
+}
 async function syncWithBackend() {
   const data = await fetchFromBackend("/api/state");
   if (!data || !data.data) return;
   const s = data.data;
+  // v19: el backend manda los reforzados y los warn_since.
+  if (Array.isArray(s.reinforced)) REINFORCED_SET = new Set(s.reinforced);
+  if (s.warn_since && typeof s.warn_since === "object") WARN_SINCE_MAP = s.warn_since;
   // Aplicar estados de zonas al store local
   if (s.modulos && typeof s.modulos === "object") {
     Object.keys(s.modulos).forEach(zone => {
@@ -146,9 +169,21 @@ async function syncWithBackend() {
   USE_BACKEND = true;
 }
 
+function wsUrlFromLocation() {
+  // v17 (tunel): el WS se deriva de la pagina. En localhost el WS esta
+  // en el puerto 5001; en el tunel (https) se intenta el mismo host
+  // (wss://host). El tunel solo pasa el puerto 5000, asi que ahi el WS
+  // no conecta y el juego se actualiza por el polling de 30 s (y las
+  // reparaciones van por POST /api/module). Sin permiso de Firefox.
+  if (typeof window === "undefined" || !window.location) return "ws://localhost:5001";
+  const proto = window.location.protocol === "https:" ? "wss://" : "ws://";
+  const host = window.location.hostname || "localhost";
+  if (host === "localhost" || host === "127.0.0.1") return proto + host + ":5001";
+  return proto + window.location.host;
+}
 function connectWebSocket() {
   if (!USE_BACKEND) return;
-  const wsUrl = BACKEND_URL.replace("http://", "ws://").replace("https://", "wss://").replace(/:\d+$/, ":5001");
+  const wsUrl = wsUrlFromLocation();
   try {
     WS = new WebSocket(wsUrl);
     WS.onopen = () => {
@@ -231,17 +266,31 @@ function readAlert() {
 
 function getModuleStatus(id) { return status[id] !== undefined ? status[id] : "ok"; }
 
-function sendSetModule(moduleId, statusValue) {
+async function sendSetModule(moduleId, statusValue) {
   // Propaga el cambio al backend (fuente de verdad compartida) para que
-  // todas las paginas/clientes lo vean. Si no hay WebSocket, solo queda local.
-  if (!USE_BACKEND || !WS || WS.readyState !== 1) return;
+  // todas las paginas/clientes lo vean.
+  // v17 (tunel): si no hay WebSocket (el tunel no pasa el puerto 5001),
+  // se usa POST /api/module, que hace exactamente lo mismo. Sin esto, la
+  // reparacion quedaba solo en local y el siguiente polling la reverted.
   const zone = zoneOf(moduleId);
-  if (!zone) return;
+  if (!zone || !USE_BACKEND) return;
   const slug = moduleId.replace(/^mod-[a-f]-/, "");
+  if (WS && WS.readyState === 1) {
+    try {
+      WS.send(JSON.stringify({ type: "set_module", zona: zone, modulo: slug, status: statusValue }));
+      return;
+    } catch (e) {
+      console.warn("store: no se pudo enviar set_module por WS, uso POST", e);
+    }
+  }
   try {
-    WS.send(JSON.stringify({ type: "set_module", zona: zone, modulo: slug, status: statusValue }));
+    await fetch(backendPath("/api/module"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ zona: zone, modulo: slug, status: statusValue }),
+    });
   } catch (e) {
-    console.warn("store: no se pudo enviar set_module", e);
+    console.warn("store: no se pudo enviar set_module por POST", e);
   }
 }
 
@@ -405,7 +454,7 @@ function reinforceModule(moduleId) {
 window.stationStore = {
   getModuleStatus, setModuleStatus, getZoneStatus, setZoneStatus, getAnyAlertStatus, getZoneModules,
   saveAlert, readAlert, fullId, allModules, setBackend, getModuleLiveLabel,
-  addPenalty, reinforce: reinforceModule
+  addPenalty, reinforce: reinforceModule, isReinforced, getWarnSince
 };
 // Funcion de depuracion global: window.setModuleStatus('mod-c-eclss', 'warn' | 'crit' | 'ok')
 window.setModuleStatus = setModuleStatus;

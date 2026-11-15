@@ -58,6 +58,9 @@
       ".diag-good{border-color:#2ecc71 !important;background:#0f2e1a !important}",
       ".flow-hint{background:#0e1a2e;border:1px solid #1e4a5a;border-radius:8px;padding:10px 12px;margin-bottom:12px;color:#cfe3ff}",
       ".pre-box{background:#2e2208;border:1px solid #f5b041;border-radius:8px;padding:10px 12px;margin:10px 0;color:#ffe9b0}",
+      ".mod-sec.shielded{border-color:#00e5ff !important;background:#0e2233 !important}",
+      ".mod-sec.shielded h2{color:#7ff3ff}",
+      ".mod-sec.shielded .pre-box{color:#7ff3ff}",
       ".reinforce-btn{display:block;width:100%;text-align:left;margin:6px 0;padding:10px 12px;border-radius:8px;border:1px solid #f5b041;background:#2e2208;color:#ffe9b0;cursor:pointer;font:inherit}",
       ".reinforce-btn:hover{border-color:#ffd166;background:#3d2f0a}",
       ".reinforce-btn:disabled{opacity:.45;cursor:default}",
@@ -69,6 +72,32 @@
       ".seq-btn:hover{border-color:#00e5ff;background:#16414f}",
       ".seq-btn.done{border-color:#2ecc71;background:#0f2e1a;color:#2ecc71}",
       ".seq-btn.bad{border-color:#e74c3c !important;background:#3d0f0f !important;animation:diagPulseRed 0.8s infinite}",
+      ".hold-btn{display:block;width:100%;padding:14px;border-radius:8px;border:1px solid #24324d;background:#1a2540;color:#e8eefc;cursor:pointer;font:inherit;text-align:left}",
+      ".hold-btn.holding{border-color:#00e5ff;background:#16414f}",
+      ".hold-bar{height:8px;background:#0e1a2e;border-radius:4px;margin-top:8px;overflow:hidden}",
+      ".hold-fill{height:100%;width:0%;background:#00e5ff;transition:width .1s linear}",
+      ".hold-hint{font-size:13px;color:#9fb3c8;margin-top:6px}",
+      ".keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:260px;margin:10px 0}",
+      ".keypad-btn{padding:14px;font-size:18px;font-weight:700;border-radius:8px;border:1px solid #24324d;background:#1a2540;color:#e8eefc;cursor:pointer}",
+      ".keypad-btn:active{background:#16414f;border-color:#00e5ff}",
+      ".keypad-display{font-size:24px;letter-spacing:8px;text-align:center;background:#0e1a2e;border:1px solid #24324d;border-radius:8px;padding:10px;margin:8px 0;color:#7ff3ff;font-variant-numeric:tabular-nums}",
+      ".keypad-display.bad{border-color:#e74c3c;color:#ff8a7a}",
+      ".wire-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}",
+      ".wire-btn{display:block;width:100%;padding:12px;border-radius:8px;border:1px solid #24324d;background:#1a2540;color:#e8eefc;cursor:pointer;font:inherit;text-align:left;margin-bottom:6px}",
+      ".wire-btn.sel{border-color:#00e5ff;background:#16414f}",
+      ".wire-btn.done{border-color:#2ecc71;background:#0f2e1a;color:#8ff5b0}",
+      ".wire-btn.bad{border-color:#e74c3c;background:#3d0f0f;animation:diagPulseRed 0.8s infinite}",
+      ".dial-wrap{display:flex;align-items:center;gap:16px;margin:10px 0}",
+      ".dial{width:110px;height:110px;border-radius:50%;border:3px solid #24324d;background:radial-gradient(circle at 35% 30%,#1a2540,#0e1a2e);position:relative;flex:0 0 auto;cursor:grab}",
+      ".dial-pointer{position:absolute;left:50%;top:50%;width:4px;height:46px;background:#00e5ff;border-radius:2px;transform-origin:50% 0}",
+      ".dial-val{font-size:26px;font-weight:800;color:#7ff3ff}",
+      ".arm-row{display:flex;align-items:center;gap:10px;margin:8px 0}",
+      ".arm-row label{flex:0 0 90px;font-size:13px;color:#9fb3c8}",
+      ".arm-row input[type=range]{flex:1}",
+      ".arm-val{flex:0 0 64px;text-align:right;font-weight:700;color:#7ff3ff}",
+      ".quiz-opt{display:block;width:100%;padding:12px;border-radius:8px;border:1px solid #24324d;background:#1a2540;color:#e8eefc;cursor:pointer;font:inherit;text-align:left;margin-bottom:8px}",
+      ".quiz-opt.bad{border-color:#e74c3c;background:#3d0f0f}",
+      ".mech-code{font-size:15px;color:#7ff3ff;background:#0e1a2e;border:1px solid #24324d;border-radius:8px;padding:10px;margin:8px 0;text-align:center}",
       ".repair-steps{list-style:none;margin:10px 0 0;padding:0}",
       ".repair-steps li{margin:6px 0}",
       ".repair-step{display:block;width:100%;text-align:left;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:#16213a;color:#e8eefc;font:inherit;cursor:pointer}",
@@ -190,6 +219,18 @@
   var seqWrong = {};     // modulo -> ultimo intento mal (brilla en rojo)
   var calVal = {};       // modulo -> valor actual del slider
   var calBad = {};       // modulo -> ultimo intento fuera de rango
+  var holdState = {};    // v18: modulo -> { timer, interval, start } del hold
+  var HOLD_MS = 2000;    // v18: hay que mantener presionado 2 s para cargar
+  // v19: estado de las mecanicas nuevas (se limpia al volver a ok).
+  var keypadInput = {};  // modulo -> digitos tecleados ("")
+  var keypadBad = {};    // modulo -> ultimo codigo mal introducido
+  var armVal = {};       // modulo -> [angulo hombro, angulo codo]
+  var dialVal = {};      // modulo -> valor actual del potenciometro
+  var wireSel = {};      // modulo -> fuente seleccionada (o null)
+  var wireDone = {};     // modulo -> { "fuente": true } pares conectados
+  var wireBad = {};      // modulo -> ultimo par mal conectado
+  var wireOrder = {};    // modulo -> orden barajado de los destinos
+  var quizWrong = {};    // modulo -> opcion mal elegida
 
   var DIAGNOSE = {
     "energy": { options: ["Eyección de masa coronal (CME)", "Llamarada solar", "Fallo del inversor"], cause: function (d) { return (d && d.cme_speed != null && d.cme_speed > 300) ? 0 : 2; } },
@@ -227,10 +268,131 @@
   var repairProgress = {};
   var repairIds = [];
   function slugOf(id) { return String(id).replace(/^mod-[a-f]-/, ""); }
+  // v19: MECANICAS POR MODULO (reales, no solo clics). Cada modulo tiene
+  // su propia mecanica, apegada a como se trabaja de verdad en la ISS:
+  // - keypad (teclado numerico): introducir un codigo de autorizacion de
+  //   4 digitos, derivado de los valores reales de la NASA (el codigo se
+  //   muestra en el monitor en facil/medio; en dificil hay que deducirlo
+  //   de los valores en vivo). Como el codigo de mando de la ISS.
+  // - arm (brazo robotico): mover el brazo a una posicion objetivo con
+  //   angulos de articulacion (hombro/codo). Como el Canadarm2.
+  // - dial (potenciometro): girar un mando circular hasta el valor
+  //   objetivo. Como los potenciometros de un panel de control.
+  // - wires (conexiones): conectar cada cable a su puerto correcto
+  //   (panel de conexiones). Como el cableado de la ISS.
+  // - quiz (preguntas): responder una pregunta real sobre el modulo
+  //   antes de seguir reparando. Como el entrenamiento de tripulacion.
+  var MECHANIC = {
+    "energy": "keypad", "eclss": "dial", "thermal": "hold", "comms": "wires",
+    "radiation": "quiz", "command": "keypad", "navigation": "dial",
+    "robotics": "arm", "robotics-eva": "wires", "structure": "wires",
+    "science": "quiz", "propulsion": "dial", "fire": "keypad",
+    "health": "quiz", "habitability": "dial", "food": "quiz"
+  };
+  // Codigo del teclado: de donde sale (valores reales de la NASA).
+  var KEYPAD = {
+    "energy":  { label: "Código de autorización del bus de energía", source: "cme_speed", hint: "la velocidad del CME" },
+    "command": { label: "Código de mando de la estación", source: "kp", hint: "el índice Kp × 100" },
+    "fire":    { label: "Código de supresión de incendios", source: "solar_wind", hint: "la velocidad del viento solar" }
+  };
+  // Brazo robotico: articulaciones y objetivo (grados).
+  var ARM = {
+    "robotics": { joints: [
+      { name: "Hombro", min: 0, max: 180, target: 45 },
+      { name: "Codo", min: 0, max: 180, target: 90 }
+    ]}
+  };
+  // Potenciometro: parametro, rango y valor objetivo.
+  var DIAL = {
+    "eclss":        { param: "Flujo de O2", unit: "L/min", min: 0, max: 10, target: 7 },
+    "navigation":   { param: "Calibración del giroscopio", unit: "°", min: 0, max: 360, target: 180 },
+    "propulsion":   { param: "Válvula de combustible", unit: "%", min: 0, max: 100, target: 60 },
+    "habitability": { param: "Presión de cabina", unit: "kPa", min: 0, max: 120, target: 101 }
+  };
+  // Conexiones: pares fuente -> destino (se barajan al mostrar).
+  var WIRES = {
+    "comms":       [["Antena A", "Transceptor 1"], ["Antena B", "Transceptor 2"], ["Antena C", "Transceptor 3"], ["Antena D", "Transceptor 4"]],
+    "robotics-eva":[["Traje EVA", "Umbilical 1"], ["Casco", "Umbilical 2"], ["Mochila PLSS", "Umbilical 3"]],
+    "structure":   [["Sensor A", "Bus de datos 1"], ["Sensor B", "Bus de datos 2"], ["Sensor C", "Bus de datos 3"]]
+  };
+  // Preguntas reales sobre el modulo (entrenamiento de tripulacion).
+  var QUIZ = {
+    "radiation": { q: "¿Qué protege mejor a la tripulación de una tormenta solar?",
+      options: ["El blindaje de la estación y refugiarse en el módulo más protegido", "Abrir las ventanas para verla mejor", "Apagar todas las luces"], correct: 0 },
+    "science":   { q: "¿Por qué los experimentos en microgravedad son valiosos?",
+      options: ["Porque en microgravedad los fluidos y las llamas se comportan distinto y se aprende física nueva", "Porque pesan menos y caben más", "Porque no necesitan electricidad"], correct: 0 },
+    "health":    { q: "¿Qué deben hacer los astronautas a diario para no perder masa muscular?",
+      options: ["Ejercicio resistido unas 2 horas al día", "Dormir 12 horas", "No comer"], correct: 0 },
+    "food":      { q: "¿Qué necesitan las plantas del invernadero Veggie para crecer en la ISS?",
+      options: ["Luz LED, agua y nutrientes (sin suelo)", "Solo oscuridad", "Tierra de la Luna"], correct: 0 }
+  };
+  // v18: el juego CAMBIA segun la dificultad (lo pidio Darian: facil para
+  // ninos, medio amigable y no tan complicado, dificil tecnico).
+  // La dificultad la guarda el menu en localStorage (xonidu-difficulty-v1).
+  function getDifficulty() {
+    try {
+      var d = localStorage.getItem("xonidu-difficulty-v1");
+      if (d === "facil" || d === "medio" || d === "dificil") return d;
+    } catch (e) {}
+    return "medio";
+  }
+  // Pasos de reparacion por dificultad (kind: slider/click/hold/sequence).
+  // Facil (ninos): 2 pasos, sin diagnostico, sin penalizacion, sin
+  // secuencia; el slider tiene la zona verde MAS ANCHA. Medio (amigable):
+  // 3 pasos, diagnostico SIN penalizacion, sin secuencia. Dificil
+  // (tecnico): todo — diagnostico con -10, slider, hold y secuencia en crit.
+  // v19: el codigo del teclado sale de los valores REALES de la NASA.
+  // Facil/medio: el codigo se muestra en el monitor (solo hay que
+  // teclearlo). Dificil: hay que deducirlo de los valores en vivo.
+  function keypadCodeFor(slug) {
+    var kp = KEYPAD[slug] || KEYPAD.energy;
+    var d = (typeof liveCache !== "undefined" && liveCache) || null;
+    var n = 0;
+    if (d) {
+      if (kp.source === "cme_speed" && d.cme_speed != null) n = Math.round(d.cme_speed);
+      else if (kp.source === "kp" && d.kp != null) n = Math.round(d.kp * 100);
+      else if (kp.source === "solar_wind" && d.solar_wind != null) n = Math.round(d.solar_wind);
+    }
+    if (!n) n = 1234; // sin datos en vivo, codigo de practica
+    return String(10000 + (n % 10000)).slice(1);
+  }
   function stepsFor(id) {
     var base = REPAIR_STEPS[slugOf(id)] || REPAIR_GENERIC;
-    if (getStatus(id) === "crit") return base.concat([REPAIR_CRIT_EXTRA]);
-    return base;
+    var diff = getDifficulty();
+    var st = getStatus(id);
+    var mech = MECHANIC[slugOf(id)] || "click";
+    var mechStep = { kind: mech, text: base[1] || base[0] || "Reparar" };
+    var steps = [];
+    if (diff === "facil") {
+      // v19: 2 pasos — ajustar + la mecanica del modulo (simplificada).
+      steps = [
+        { kind: "slider", text: base[0] || "Ajustar" },
+        mechStep,
+      ];
+    } else if (diff === "medio") {
+      steps = [
+        { kind: "slider", text: base[0] || "Ajustar" },
+        mechStep,
+        { kind: "click", text: base[2] || base[1] || "Verificar" },
+      ];
+    } else {
+      steps = [
+        { kind: "slider", text: base[0] || "Ajustar" },
+        mechStep,
+        { kind: "click", text: base[2] || base[1] || "Verificar" },
+      ];
+      if (st === "crit") steps.push({ kind: "sequence", text: REPAIR_CRIT_EXTRA });
+    }
+    return steps;
+  }
+  // Zona verde del slider por dificultad (facil = mas ancha, mas facil).
+  function calRangeFor(slug) {
+    var cal = CALIBRATE[slug] || CALIBRATE.energy;
+    if (getDifficulty() !== "facil") return cal;
+    var span = cal.hi - cal.lo;
+    var lo = Math.max(cal.min, Math.round(cal.lo - span * 0.5));
+    var hi = Math.min(cal.max, Math.round(cal.hi + span * 0.5));
+    return { param: cal.param, unit: cal.unit, min: cal.min, max: cal.max, lo: lo, hi: hi };
   }
   function repairSection(ids) {
     repairIds = ids.slice();
@@ -246,13 +408,228 @@
         // v16: el slider (Ajustar) dispara "input" al arrastrar.
         box.addEventListener("input", function (e) {
           var sl = e.target && e.target.closest ? e.target.closest(".cal-slider") : null;
-          if (!sl) return;
+          if (!sl) {
+            // v19: sliders del brazo robotico (articulaciones).
+            var as = e.target && e.target.closest ? e.target.closest(".arm-slider") : null;
+            if (!as) return;
+            var amod = as.getAttribute("data-mod");
+            var aji = parseInt(as.getAttribute("data-joint"), 10);
+            if (!armVal[amod]) armVal[amod] = [90, 90];
+            armVal[amod][aji] = parseInt(as.value, 10);
+            var albl = document.getElementById("armVal-" + amod + "-" + aji);
+            if (albl) albl.textContent = String(armVal[amod][aji]) + "°";
+            return;
+          }
           var smod = sl.getAttribute("data-mod");
           calVal[smod] = parseInt(sl.value, 10);
           var lbl = document.getElementById("calVal-" + smod);
           if (lbl) lbl.textContent = String(calVal[smod]);
         });
+        // v18: MANTENER — mousedown/touchstart empieza la carga (2 s),
+        // mouseup/touchend/mouseleave la cancela. Sin esto no hay hold.
+        function holdStart(e) {
+          var hb = e.target && e.target.closest ? e.target.closest(".hold-btn") : null;
+          if (!hb || hb.disabled) return;
+          var hmod = hb.getAttribute("data-mod");
+          var hstep = parseInt(hb.getAttribute("data-step"), 10);
+          var hp = repairProgress[hmod];
+          if (!hp || hstep !== hp.done || hp.busy !== -1) return;
+          if (holdState[hmod] && holdState[hmod].timer) return;
+          hb.classList.add("holding");
+          var fill = document.getElementById("holdFill-" + hmod);
+          var started = Date.now();
+          var iv = setInterval(function () {
+            var pct = Math.min(100, Math.round(((Date.now() - started) / HOLD_MS) * 100));
+            if (fill) fill.style.width = pct + "%";
+          }, 50);
+          var tm = setTimeout(function () {
+            clearInterval(iv);
+            delete holdState[hmod];
+            var p2 = repairProgress[hmod];
+            if (!p2) return;
+            p2.done += 1;
+            p2.busy = -1;
+            var steps = stepsFor(hmod);
+            if (p2.done >= steps.length) {
+              delete repairProgress[hmod];
+              try { if (window.stationStore) stationStore.setModuleStatus(hmod, "ok"); } catch (err) {}
+            }
+            repairSection(repairIds);
+          }, HOLD_MS);
+          holdState[hmod] = { timer: tm, interval: iv, start: started };
+        }
+        function holdCancel(e) {
+          var hb = e.target && e.target.closest ? e.target.closest(".hold-btn") : null;
+          if (!hb) return;
+          var hmod = hb.getAttribute("data-mod");
+          var hs = holdState[hmod];
+          if (!hs) return;
+          clearTimeout(hs.timer);
+          clearInterval(hs.interval);
+          delete holdState[hmod];
+          hb.classList.remove("holding");
+          var fill = document.getElementById("holdFill-" + hmod);
+          if (fill) fill.style.width = "0%";
+        }
+        box.addEventListener("mousedown", holdStart);
+        box.addEventListener("touchstart", holdStart, { passive: true });
+        box.addEventListener("mouseup", holdCancel);
+        box.addEventListener("mouseleave", holdCancel);
+        box.addEventListener("touchend", holdCancel);
+        box.addEventListener("touchcancel", holdCancel);
         box.addEventListener("click", function (e) {
+          // v19: TECLADO NUMERICO — teclear el codigo de 4 digitos.
+          var kb = e.target && e.target.closest ? e.target.closest(".keypad-btn[data-key]") : null;
+          if (kb && !kb.disabled) {
+            var kmod = kb.getAttribute("data-mod");
+            var kstep = parseInt(kb.getAttribute("data-step"), 10);
+            var kp = repairProgress[kmod];
+            if (!kp || kstep !== kp.done || kp.busy !== -1) return;
+            var key = kb.getAttribute("data-key");
+            var cur = keypadInput[kmod] || "";
+            if (key === "C") { keypadInput[kmod] = ""; delete keypadBad[kmod]; }
+            else if (key === "↵") {
+              var code = keypadCodeFor(slugOf(kmod));
+              if (cur === code) {
+                delete keypadInput[kmod]; delete keypadBad[kmod];
+                kp.done += 1; kp.busy = -1;
+                var ks = stepsFor(kmod);
+                if (kp.done >= ks.length) {
+                  delete repairProgress[kmod];
+                  try { if (window.stationStore) stationStore.setModuleStatus(kmod, "ok"); } catch (err) {}
+                }
+              } else {
+                keypadBad[kmod] = true; keypadInput[kmod] = "";
+              }
+            } else if (cur.length < 4) { keypadInput[kmod] = cur + key; }
+            repairSection(repairIds);
+            return;
+          }
+          // v19: POTENCIOMETRO — botones + / -.
+          var db = e.target && e.target.closest ? e.target.closest(".keypad-btn[data-dial]") : null;
+          if (db && !db.disabled) {
+            var dmod = db.getAttribute("data-mod");
+            var dl = DIAL[slugOf(dmod)] || DIAL.eclss;
+            var dv = (dialVal[dmod] !== undefined) ? dialVal[dmod] : Math.round((dl.min + dl.max) / 2);
+            dv = Math.max(dl.min, Math.min(dl.max, dv + parseInt(db.getAttribute("data-dial"), 10)));
+            dialVal[dmod] = dv;
+            repairSection(repairIds);
+            return;
+          }
+          // v19: POTENCIOMETRO — Aplicar valor.
+          var da = e.target && e.target.closest ? e.target.closest("[data-dial-apply]") : null;
+          if (da && !da.disabled) {
+            var amod = da.getAttribute("data-mod");
+            var astep = parseInt(da.getAttribute("data-step"), 10);
+            var ap = repairProgress[amod];
+            if (!ap || astep !== ap.done || ap.busy !== -1) return;
+            var adl = DIAL[slugOf(amod)] || DIAL.eclss;
+            var adiff = getDifficulty();
+            var atol = adiff === "facil" ? 2 : (adiff === "medio" ? 1 : 0);
+            var av = (dialVal[amod] !== undefined) ? dialVal[amod] : Math.round((adl.min + adl.max) / 2);
+            if (Math.abs(av - adl.target) > atol) { repairSection(repairIds); return; }
+            ap.done += 1; ap.busy = -1;
+            var as = stepsFor(amod);
+            if (ap.done >= as.length) {
+              delete repairProgress[amod];
+              try { if (window.stationStore) stationStore.setModuleStatus(amod, "ok"); } catch (err) {}
+            }
+            repairSection(repairIds);
+            return;
+          }
+          // v19: BRAZO ROBOTICO — Aplicar posicion.
+          var ab = e.target && e.target.closest ? e.target.closest("[data-arm]") : null;
+          if (ab && !ab.disabled) {
+            var bmod = ab.getAttribute("data-mod");
+            var bstep = parseInt(ab.getAttribute("data-step"), 10);
+            var bp = repairProgress[bmod];
+            if (!bp || bstep !== bp.done || bp.busy !== -1) return;
+            var barm = ARM[slugOf(bmod)] || ARM.robotics;
+            var bdiff = getDifficulty();
+            var btol = bdiff === "facil" ? 10 : (bdiff === "medio" ? 5 : 2);
+            var bvals = armVal[bmod] || barm.joints.map(function (j) { return Math.round((j.min + j.max) / 2); });
+            var bjoints = (bdiff === "facil" || bdiff === "medio") ? barm.joints.slice(0, 1) : barm.joints;
+            var bok = bjoints.every(function (j, ji) { return Math.abs(bvals[ji] - j.target) <= btol; });
+            if (!bok) { repairSection(repairIds); return; }
+            bp.done += 1; bp.busy = -1;
+            var bs = stepsFor(bmod);
+            if (bp.done >= bs.length) {
+              delete repairProgress[bmod];
+              try { if (window.stationStore) stationStore.setModuleStatus(bmod, "ok"); } catch (err) {}
+            }
+            repairSection(repairIds);
+            return;
+          }
+          // v19: CONEXIONES — elegir un cable (fuente).
+          var ws = e.target && e.target.closest ? e.target.closest("[data-wire-src]") : null;
+          if (ws && !ws.disabled) {
+            var wmod = ws.getAttribute("data-mod");
+            var src = ws.getAttribute("data-wire-src");
+            if ((wireDone[wmod] || {})[src]) return;
+            wireSel[wmod] = (wireSel[wmod] === src) ? null : src;
+            repairSection(repairIds);
+            return;
+          }
+          // v19: CONEXIONES — conectar al puerto (destino).
+          var wd = e.target && e.target.closest ? e.target.closest("[data-wire-dst]") : null;
+          if (wd && !wd.disabled) {
+            var dmod2 = wd.getAttribute("data-mod");
+            var dst = wd.getAttribute("data-wire-dst");
+            var sel2 = wireSel[dmod2];
+            if (!sel2) return;
+            var wp = WIRES[slugOf(dmod2)] || WIRES.comms;
+            var pair = wp.filter(function (pp) { return pp[0] === sel2; })[0];
+            if (pair && pair[1] === dst) {
+              if (!wireDone[dmod2]) wireDone[dmod2] = {};
+              wireDone[dmod2][sel2] = true;
+              delete wireBad[dmod2];
+              wireSel[dmod2] = null;
+              var wdiff2 = getDifficulty();
+              var npairs = wdiff2 === "facil" ? 2 : (wdiff2 === "medio" ? 3 : wp.length);
+              var allDone = wp.slice(0, npairs).every(function (pp) { return (wireDone[dmod2] || {})[pp[0]]; });
+              if (allDone) {
+                var wprog = repairProgress[dmod2];
+                // El paso de conexiones es el paso actual (done).
+                var wsteps = stepsFor(dmod2);
+                var widx = wsteps.findIndex(function (s) { return s.kind === "wires"; });
+                if (wprog && widx >= 0 && wprog.done === widx) {
+                  wprog.done += 1; wprog.busy = -1;
+                  if (wprog.done >= wsteps.length) {
+                    delete repairProgress[dmod2];
+                    try { if (window.stationStore) stationStore.setModuleStatus(dmod2, "ok"); } catch (err) {}
+                  }
+                }
+              }
+            } else {
+              wireBad[dmod2] = dst;
+              wireSel[dmod2] = null;
+            }
+            repairSection(repairIds);
+            return;
+          }
+          // v19: PREGUNTAS — responder.
+          var qq = e.target && e.target.closest ? e.target.closest(".quiz-opt") : null;
+          if (qq && !qq.disabled) {
+            var qmod = qq.getAttribute("data-mod");
+            var qstep = parseInt(qq.getAttribute("data-step"), 10);
+            var qprog = repairProgress[qmod];
+            if (!qprog || qstep !== qprog.done || qprog.busy !== -1) return;
+            var qz = QUIZ[slugOf(qmod)] || QUIZ.radiation;
+            var pick = parseInt(qq.getAttribute("data-quiz"), 10);
+            if (pick === qz.correct) {
+              delete quizWrong[qmod];
+              qprog.done += 1; qprog.busy = -1;
+              var qs = stepsFor(qmod);
+              if (qprog.done >= qs.length) {
+                delete repairProgress[qmod];
+                try { if (window.stationStore) stationStore.setModuleStatus(qmod, "ok"); } catch (err) {}
+              }
+            } else {
+              quizWrong[qmod] = pick;
+            }
+            repairSection(repairIds);
+            return;
+          }
           var dg = e.target && e.target.closest ? e.target.closest(".diag-opt") : null;
           if (dg) {
             var modId = dg.getAttribute("data-mod");
@@ -266,8 +643,12 @@
             } else {
               diagWrong[modId] = true;
               diagWrongPick[modId] = pick;
-              // v15: la opcion mal elegida brilla en rojo Y baja puntos.
-              try { if (window.stationStore && stationStore.addPenalty) stationStore.addPenalty(10); } catch (err) {}
+              // v15/v18: la opcion mal elegida brilla en rojo. Solo en
+              // DIFICIL baja puntos (-10); en medio es amigable (sin
+              // penalizacion) y en facil ni hay diagnostico.
+              if (getDifficulty() === "dificil") {
+                try { if (window.stationStore && stationStore.addPenalty) stationStore.addPenalty(10); } catch (err) {}
+              }
             }
             repairSection(repairIds);
             return;
@@ -338,8 +719,9 @@
           var prog = repairProgress[modId];
           if (!prog || stepIdx !== prog.done || prog.busy !== -1) return;
           // v16: el paso 0 es el slider — Aplicar solo si esta en la zona verde.
+          // v18: la zona verde es la de calRangeFor (ancha en facil).
           if (b.getAttribute("data-cal")) {
-            var cal = CALIBRATE[slugOf(modId)] || CALIBRATE.energy;
+            var cal = calRangeFor(slugOf(modId));
             var v = (calVal[modId] !== undefined) ? calVal[modId] : Math.round((cal.min + cal.max) / 2);
             if (v < cal.lo || v > cal.hi) {
               calBad[modId] = true;
@@ -376,19 +758,26 @@
       if (getStatus(id) !== "ok") anyFail = true;
     });
     if (anyFail) {
-      html += '<div class="flow-hint">🧭 <b>Cómo jugar:</b> 1️⃣ Lee las señales y los valores en vivo · 2️⃣ <b>Diagnostica</b> la causa (si te equivocas, la opción brilla en rojo y pierdes 10 pts) · 3️⃣ <b>Repara</b>: ajusta el slider a la zona verde 🎚️, haz los pasos y, si es crítico, ordena la secuencia 🔢. Si el módulo solo está en <b>PRE</b>, aún no falló: puedes <b>reforzarlo</b> para ganar tiempo.</div>';
+      var _diff = getDifficulty();
+      var _hint = _diff === "facil"
+        ? '<div class="flow-hint">🧭 <b>Cómo jugar:</b> 1️⃣ Mira el módulo en amarillo o rojo · 2️⃣ <b>Repara</b>: mueve el slider 🎚️ a la zona verde y haz la tarea del módulo (teclear el código 🔢, mover el brazo 🦾, girar el mando 🎛️, conectar los cables 🔌 o responder la pregunta ❓). ¡Tú puedes! Si el módulo solo está en <b>PRE</b> (ámbar), aún no falló: puedes <b>reforzarlo</b> 🛡 para ganar tiempo — y cuando lo refuerces se pondrá <b>azul 🛡 Protegido</b>.</div>'
+        : _diff === "medio"
+        ? '<div class="flow-hint">🧭 <b>Cómo jugar:</b> 1️⃣ Lee las señales y los valores en vivo · 2️⃣ <b>Diagnostica</b> la causa (si te equivocas, la opción brilla en rojo, pero no pierdes puntos) · 3️⃣ <b>Repara</b>: ajusta el slider 🎚️ a la zona verde y haz la tarea del módulo (código 🔢, brazo 🦾, mando 🎛️, cables 🔌 o pregunta ❓), luego verifica. Si el módulo solo está en <b>PRE</b>, aún no falló: puedes <b>reforzarlo</b> 🛡 para ganar tiempo — y cuando lo refuerces se pondrá <b>azul 🛡 Protegido</b>.</div>'
+        : '<div class="flow-hint">🧭 <b>Cómo jugar:</b> 1️⃣ Lee las señales y los valores en vivo · 2️⃣ <b>Diagnostica</b> la causa (si te equivocas, la opción brilla en rojo y pierdes 10 pts) · 3️⃣ <b>Repara</b>: ajusta el slider 🎚️ a la zona verde, haz la tarea del módulo (código 🔢, brazo 🦾, mando 🎛️, cables 🔌 o pregunta ❓), verifica y, si es crítico, ordena la secuencia 🔢. Si el módulo solo está en <b>PRE</b>, aún no falló: puedes <b>reforzarlo</b> 🛡 para ganar tiempo — y cuando lo refuerces se pondrá <b>azul 🛡 Protegido</b>.</div>';
+      html += _hint;
     }
     ids.forEach(function (id) {
       var st = getStatus(id);
       var info = (window.XONIDU_MODULE_INFO || {})[id];
       var name = info ? info.name : id;
-      if (st === "ok") { delete repairProgress[id]; delete diagDone[id]; delete diagWrong[id]; delete diagWrongPick[id]; delete diagCorrect[id]; delete reinforceProgress[id]; delete reinforced[id]; delete seqOrder[id]; delete seqProgress[id]; delete seqWrong[id]; delete calVal[id]; delete calBad[id]; return; }
+      if (st === "ok") { delete repairProgress[id]; delete diagDone[id]; delete diagWrong[id]; delete diagWrongPick[id]; delete diagCorrect[id]; delete reinforceProgress[id]; delete reinforced[id]; delete seqOrder[id]; delete seqProgress[id]; delete seqWrong[id]; delete calVal[id]; delete calBad[id]; delete holdState[id]; delete keypadInput[id]; delete keypadBad[id]; delete armVal[id]; delete dialVal[id]; delete wireSel[id]; delete wireDone[id]; delete wireBad[id]; delete wireOrder[id]; delete quizWrong[id]; return; }
       // v15: senal temprana (PRE) — la falla se ve venir, aun no ocurrio.
       if (st === "pre") {
-        html += '<div class="mod-sec mod-repair pre"><h2>⚠ Señal temprana — ' + esc(name) + helpHTML("repair", id) + helpHTML("module", id) + '</h2>'
+        var isShielded = reinforced[id] || (window.stationStore && stationStore.isReinforced && stationStore.isReinforced(id));
+        html += '<div class="mod-sec mod-repair ' + (isShielded ? "shielded" : "pre") + '"><h2>' + (isShielded ? "🛡 Protegido — " : "⚠ Señal temprana — ") + esc(name) + helpHTML("repair", id) + helpHTML("module", id) + '</h2>'
           + '<div class="pre-box">' + preSignalFor(id) + '</div>'
-          + (reinforced[id]
-              ? '<p><b>🛡 Reforzado ✓</b> — si este módulo falla, tendrás el <b>doble de tiempo</b> para atenderlo antes de que pase a crítico.</p>'
+          + (isShielded
+              ? '<p><b>🛡 Reforzado ✓ — PROTEGIDO</b> — el módulo ya está reforzado: si falla, tendrás el <b>doble de tiempo</b> para atenderlo antes de que pase a crítico. Ya no hace falta reforzar más.</p>'
               : (function () {
                   var rp = reinforceProgress[id] || (reinforceProgress[id] = { done: 0, busy: -1 });
                   var steps = ["Cerrar válvulas de aislamiento", "Activar escudos y redundancia"];
@@ -402,11 +791,16 @@
           + "</div>";
         return;
       }
+      // v18: en FACIL no hay diagnostico (es para ninos: se va directo a
+      // reparar). En medio y dificil si hay que pensar la causa.
+      if (getDifficulty() === "facil") diagDone[id] = true;
       if (!diagDone[id]) {
         var dg = diagnoseFor(id);
         html += '<div class="mod-sec mod-repair ' + st + '"><h2>🔍 Diagnóstico — ' + esc(name) + helpHTML("repair", id) + helpHTML("module", id) + '</h2>'
           + '<p>Estado: <span class="mod-state ' + st + '">' + LABEL[st] + '</span> — antes de reparar hay que <b>pensar</b>: ¿qué causó esta falla? Lee los <b>valores en vivo</b> de la NASA (abajo) y elige. Sin el diagnóstico correcto no se desbloquea la reparación.</p>'
-          + (diagWrong[id] ? '<p class="diag-wrong">❌ Esa no es la causa — <b>−10 pts</b>. Revisa los valores en vivo (CME, Kp, llamarada, DSN, NeoWs) e inténtalo de nuevo.</p>' : "")
+          + (diagWrong[id] ? (getDifficulty() === "dificil"
+              ? '<p class="diag-wrong">❌ Esa no es la causa — <b>−10 pts</b>. Revisa los valores en vivo (CME, Kp, llamarada, DSN, NeoWs) e inténtalo de nuevo.</p>'
+              : '<p class="diag-wrong">❌ Esa no es la causa — revisa los valores en vivo (CME, Kp, llamarada, DSN, NeoWs) e inténtalo de nuevo.</p>') : "")
           + dg.options.map(function (o, i) {
               var cls = "diag-opt";
               if (diagWrongPick[id] === i) cls += " diag-bad";
@@ -431,8 +825,8 @@
             var busy = i === prog.busy;
             // v16: el primer paso es AJUSTAR (slider, no un clic) y el
             // ultimo paso de una falla critica es una SECUENCIA (ordenar).
-            if (i === 0) {
-              var cal = CALIBRATE[slugOf(id)] || CALIBRATE.energy;
+            if (s.kind === "slider") {
+              var cal = calRangeFor(slugOf(id));
               var v = (calVal[id] !== undefined) ? calVal[id] : Math.round((cal.min + cal.max) / 2);
               if (done) return '<li><button type="button" class="repair-step done" data-mod="' + esc(id) + '" data-step="0" disabled>1. 🎚️ Ajustar ' + esc(cal.param) + ' <span class="st">✓ Hecho</span></button></li>';
               var bad = calBad[id] ? '<p class="cal-bad">❌ Fuera de rango — el valor debe estar entre ' + cal.lo + " y " + cal.hi + " " + esc(cal.unit) + ".</p>" : "";
@@ -444,7 +838,7 @@
                 + bad
                 + '<button type="button" class="repair-step" data-mod="' + esc(id) + '" data-step="0" data-cal="1">Aplicar ajuste</button></div></li>';
             }
-            if (st === "crit" && i === steps.length - 1) {
+            if (s.kind === "sequence") {
               var seq = SEQUENCE[slugOf(id)] || SEQUENCE.energy;
               if (done) return '<li><button type="button" class="repair-step done" data-mod="' + esc(id) + '" data-step="' + i + '" disabled>' + (i + 1) + '. 🔢 Secuencia correcta <span class="st">✓ Hecho</span></button></li>';
               if (!seqOrder[id]) {
@@ -463,11 +857,118 @@
                   }).join("")
                 + "</div></li>";
             }
+            if (s.kind === "hold") {
+              // v18: MANTENER — mantener presionado 2 s para cargar.
+              // No es un clic: hay que AGUANTAR. Si sueltas antes, se reinicia.
+              if (done) return '<li><button type="button" class="repair-step done" data-mod="' + esc(id) + '" data-step="' + i + '" disabled>' + (i + 1) + '. 🔋 ' + esc(s.text) + ' <span class="st">✓ Hecho</span></button></li>';
+              var holdDis = (i === prog.done) ? "" : " disabled";
+              return '<li><button type="button" class="hold-btn" data-mod="' + esc(id) + '" data-step="' + i + '"' + holdDis + '>'
+                + "🔋 Paso " + (i + 1) + " — Mantén presionado para cargar: " + esc(s.text)
+                + '<span class="hold-bar"><span class="hold-fill" id="holdFill-' + esc(id) + '"></span></span>'
+                + '<span class="hold-hint">Aguanta 2 segundos sin soltar. Si sueltas antes, la carga se pierde.</span></button></li>';
+            }
+            // v19: TECLADO NUMERICO — el monitor muestra un codigo de 4
+            // digitos (de los valores reales de la NASA) y hay que teclearlo.
+            if (s.kind === "keypad") {
+              if (done) return '<li><button type="button" class="repair-step done" data-mod="' + esc(id) + '" data-step="' + i + '" disabled>' + (i + 1) + '. 🔢 Código introducido <span class="st">✓ Hecho</span></button></li>';
+              var kp = KEYPAD[slugOf(id)] || KEYPAD.energy;
+              var code = keypadCodeFor(slugOf(id));
+              var inp = keypadInput[id] || "";
+              var showCode = getDifficulty() !== "dificil";
+              var disp = (inp + "____").slice(0, 4);
+              var kdis = (i === prog.done) ? "" : " disabled";
+              return '<li><div class="cal-box"><b>🔢 Paso ' + (i + 1) + " — " + esc(kp.label) + '</b>'
+                + (showCode
+                    ? '<p class="mech-code">Código en el monitor: <b>' + code + '</b></p>'
+                    : '<p>El código es <b>' + esc(kp.hint) + '</b> — míralo en <b>Valores en vivo</b> (abajo) y teclea los 4 dígitos.</p>')
+                + '<div class="keypad-display' + (keypadBad[id] ? " bad" : "") + '">' + disp + '</div>'
+                + (keypadBad[id] ? '<p class="cal-bad">❌ Código incorrecto — vuelve a intentarlo.</p>' : "")
+                + '<div class="keypad">'
+                + ["1","2","3","4","5","6","7","8","9","C","0","↵"].map(function (k) {
+                    return '<button type="button" class="keypad-btn" data-mod="' + esc(id) + '" data-step="' + i + '" data-key="' + k + '"' + kdis + '>' + k + '</button>';
+                  }).join("")
+                + '</div></div></li>';
+            }
+            // v19: BRAZO ROBOTICO — mover las articulaciones al objetivo.
+            if (s.kind === "arm") {
+              if (done) return '<li><button type="button" class="repair-step done" data-mod="' + esc(id) + '" data-step="' + i + '" disabled>' + (i + 1) + '. 🦾 Brazo en posición <span class="st">✓ Hecho</span></button></li>';
+              var arm = ARM[slugOf(id)] || ARM.robotics;
+              var diff = getDifficulty();
+              var joints = (diff === "facil" || diff === "medio") ? arm.joints.slice(0, 1) : arm.joints;
+              var tol = diff === "facil" ? 10 : (diff === "medio" ? 5 : 2);
+              var vals = armVal[id] || (armVal[id] = arm.joints.map(function (j) { return Math.round((j.min + j.max) / 2); }));
+              var adis = (i === prog.done) ? "" : " disabled";
+              return '<li><div class="cal-box"><b>🦾 Paso ' + (i + 1) + " — Controla el brazo robótico</b>"
+                + '<p>Mueve cada articulación a su posición objetivo (tolerancia ±' + tol + '°).</p>'
+                + joints.map(function (j, ji) {
+                    return '<div class="arm-row"><label>' + esc(j.name) + ' → ' + j.target + '°</label>'
+                      + '<input type="range" class="arm-slider" data-mod="' + esc(id) + '" data-joint="' + ji + '" min="' + j.min + '" max="' + j.max + '" step="1" value="' + vals[ji] + '"' + adis + '>'
+                      + '<span class="arm-val" id="armVal-' + esc(id) + '-' + ji + '">' + vals[ji] + '°</span></div>';
+                  }).join("")
+                + '<button type="button" class="repair-step" data-mod="' + esc(id) + '" data-step="' + i + '" data-arm="1"' + adis + '>Aplicar posición</button></div></li>';
+            }
+            // v19: POTENCIOMETRO — girar el mando hasta el valor objetivo.
+            if (s.kind === "dial") {
+              if (done) return '<li><button type="button" class="repair-step done" data-mod="' + esc(id) + '" data-step="' + i + '" disabled>' + (i + 1) + '. 🎛️ Potenciómetro ajustado <span class="st">✓ Hecho</span></button></li>';
+              var dl = DIAL[slugOf(id)] || DIAL.eclss;
+              var ddiff = getDifficulty();
+              var dtol = ddiff === "facil" ? 2 : (ddiff === "medio" ? 1 : 0);
+              var dv = (dialVal[id] !== undefined) ? dialVal[id] : Math.round((dl.min + dl.max) / 2);
+              var ddis = (i === prog.done) ? "" : " disabled";
+              var angle = -135 + ((dv - dl.min) / Math.max(1, dl.max - dl.min)) * 270;
+              return '<li><div class="cal-box"><b>🎛️ Paso ' + (i + 1) + " — " + esc(dl.param) + '</b>'
+                + '<p>Gira el potenciómetro hasta <b>' + dl.target + " " + esc(dl.unit) + '</b> (tolerancia ±' + dtol + ").</p>"
+                + '<div class="dial-wrap"><div class="dial" data-mod="' + esc(id) + '" data-step="' + i + '"' + ddis + '><div class="dial-pointer" style="transform:rotate(' + angle + 'deg)"></div></div>'
+                + '<div><div class="dial-val" id="dialVal-' + esc(id) + '">' + dv + " " + esc(dl.unit) + '</div>'
+                + '<div><button type="button" class="keypad-btn" data-mod="' + esc(id) + '" data-dial="-1"' + ddis + '>−</button> '
+                + '<button type="button" class="keypad-btn" data-mod="' + esc(id) + '" data-dial="1"' + ddis + '>+</button></div></div></div>'
+                + '<button type="button" class="repair-step" data-mod="' + esc(id) + '" data-step="' + i + '" data-dial-apply="1"' + ddis + '>Aplicar valor</button></div></li>';
+            }
+            // v19: CONEXIONES — conectar cada cable a su puerto correcto.
+            if (s.kind === "wires") {
+              if (done) return '<li><button type="button" class="repair-step done" data-mod="' + esc(id) + '" data-step="' + i + '" disabled>' + (i + 1) + '. 🔌 Cables conectados <span class="st">✓ Hecho</span></button></li>';
+              var wp = WIRES[slugOf(id)] || WIRES.comms;
+              var wdiff = getDifficulty();
+              var npairs = wdiff === "facil" ? 2 : (wdiff === "medio" ? 3 : wp.length);
+              var pairs = wp.slice(0, npairs);
+              if (!wireOrder[id]) wireOrder[id] = pairs.map(function (p) { return p[1]; }).sort(function () { return Math.random() - 0.5; });
+              var wdone = wireDone[id] || {};
+              var sel = wireSel[id];
+              var wdis = (i === prog.done) ? "" : " disabled";
+              var left = pairs.map(function (p) {
+                var cls = wdone[p[0]] ? " done" : (sel === p[0] ? " sel" : "");
+                return '<button type="button" class="wire-btn' + cls + '" data-mod="' + esc(id) + '" data-wire-src="' + esc(p[0]) + '"' + wdis + '>' + esc(p[0]) + '</button>';
+              }).join("");
+              var right = wireOrder[id].map(function (dst) {
+                var src = pairs.filter(function (p) { return p[1] === dst; })[0][0];
+                var cls = wdone[src] ? " done" : (wireBad[id] === dst ? " bad" : "");
+                return '<button type="button" class="wire-btn' + cls + '" data-mod="' + esc(id) + '" data-wire-dst="' + esc(dst) + '"' + wdis + '>' + esc(dst) + '</button>';
+              }).join("");
+              return '<li><div class="cal-box"><b>🔌 Paso ' + (i + 1) + " — Conecta los cables</b>"
+                + '<p>Toca un cable de la izquierda y luego su puerto de la derecha.</p>'
+                + (wireBad[id] ? '<p class="cal-bad">❌ Esa conexión no es — revisa el diagrama.</p>' : "")
+                + '<div class="wire-cols"><div>' + left + '</div><div>' + right + '</div></div></div></li>';
+            }
+            // v19: PREGUNTAS — responder una pregunta real sobre el modulo.
+            if (s.kind === "quiz") {
+              if (done) return '<li><button type="button" class="repair-step done" data-mod="' + esc(id) + '" data-step="' + i + '" disabled>' + (i + 1) + '. ❓ Pregunta correcta <span class="st">✓ Hecho</span></button></li>';
+              var qz = QUIZ[slugOf(id)] || QUIZ.radiation;
+              var qdiff = getDifficulty();
+              var opts = qdiff === "facil" ? qz.options.slice(0, 2) : qz.options;
+              var qdis = (i === prog.done) ? "" : " disabled";
+              return '<li><div class="cal-box"><b>❓ Paso ' + (i + 1) + " — Pregunta de tripulación</b>"
+                + '<p>' + esc(qz.q) + '</p>'
+                + opts.map(function (o, oi) {
+                    var cls = (quizWrong[id] === oi) ? " bad" : "";
+                    return '<button type="button" class="quiz-opt' + cls + '" data-mod="' + esc(id) + '" data-step="' + i + '" data-quiz="' + oi + '"' + qdis + '>' + (oi + 1) + ". " + esc(o) + '</button>';
+                  }).join("")
+                + '</div></li>';
+            }
             var dis = (!done && !busy && i === prog.done) ? "" : " disabled";
             var cls = done ? " done" : (busy ? " busy" : "");
             var mark = done ? "✓ Hecho" : (busy ? "… Trabajando" : (i === prog.done ? "▶ Hacer" : "—"));
             return '<li><button type="button" class="repair-step' + cls + '" data-mod="' + esc(id) + '" data-step="' + i + '"' + dis + '>'
-              + (i + 1) + ". " + esc(s) + '<span class="st">' + mark + "</span></button></li>";
+              + (i + 1) + ". " + esc(s.text) + '<span class="st">' + mark + "</span></button></li>";
           }).join("")
         + "</ol>"
         + "<p class=\"muted\">Al completar los pasos, el módulo vuelve a Normal y la anomalía queda atendida.</p></div>";

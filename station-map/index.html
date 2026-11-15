@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Station Map</title>
-  <link rel="stylesheet" href="style.css?v=11">
+  <link rel="stylesheet" href="style.css?v=14">
   <script>
     // El juego empieza obligatoriamente en el menu. Si no hay sesion iniciada
     // o no hay una mision activa en el backend, se redirige al menu.
@@ -52,6 +52,12 @@
       <div id="toast" class="toast" role="status"></div>
     </div>
 
+    <!-- v19: rejilla de zonas para MOVIL — en el telefono los poligonos
+         de la imagen son pequenos; estos 6 botones grandes muestran el
+         estado de cada zona (verde/amarillo/rojo) y al tocar uno se
+         selecciona la zona igual que al tocarla en la imagen. -->
+    <nav id="zoneGrid" class="zone-grid" aria-label="Zonas de la estación"></nav>
+
     <aside class="panel">
       <p id="hint" class="muted">Toca una zona (A–F) para seleccionarla.</p>
       <div id="info" hidden>
@@ -90,7 +96,7 @@
     </div>
   </section>
 
-  <script src="../store.js?v=11"></script>
-  <script src="app.js?v=11"></script>
+  <script src="../store.js?v=14"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>

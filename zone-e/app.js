@@ -63,7 +63,23 @@ function render() {
     const label = document.createElementNS(NS, "text");
     label.setAttribute("x", cx);
     label.setAttribute("y", cy);
-    label.setAttribute("class", "poly-label " + m.status);
+    // v19: clase shielded (azul) si el modulo esta reforzado; urgent
+    // (parpadea en rojo) si la cuenta atras de escalado es <= 5 s.
+    let _lblCls = "poly-label " + m.status;
+    const _fullId2 = localFullId(m.id);
+    const _sh2 = (typeof stationStore !== "undefined" && stationStore.isReinforced) ? stationStore.isReinforced(_fullId2) : false;
+    if (m.status === "pre" && _sh2) _lblCls += " shielded";
+    if (m.status === "warn" && typeof stationStore !== "undefined" && stationStore.getWarnSince) {
+      const _s2 = stationStore.getWarnSince(_fullId2);
+      if (_s2) {
+        let _d2 = "medio";
+        try { const _dd = localStorage.getItem("xonidu-difficulty-v1"); if (_dd === "facil" || _dd === "medio" || _dd === "dificil") _d2 = _dd; } catch (e) {}
+        let _w2 = _d2 === "facil" ? 30 : (_d2 === "medio" ? 20 : 15);
+        if (_sh2) _w2 *= 2;
+        if (_w2 - (Date.now() - new Date(_s2).getTime()) / 1000 <= 5) _lblCls += " urgent";
+      }
+    }
+    label.setAttribute("class", _lblCls);
     label.setAttribute("text-anchor", "middle");
     label.setAttribute("dominant-baseline", "middle");
     const nameLine = document.createElementNS(NS, "tspan");
@@ -87,7 +103,25 @@ function render() {
     statusLine.setAttribute("x", cx);
     statusLine.setAttribute("dy", "2.6");
     statusLine.setAttribute("class", "poly-label-status");
-    statusLine.textContent = STATUS_SHORT[m.status];
+    // v19: si el modulo esta REFORZADO se ve el escudo (azul 🛡) en vez
+    // de seguir en amarillo; y si esta en warn, la cuenta atras de
+    // escalado (15-30 s sin atender -> crit, parpadea en rojo).
+    const _full = localFullId(m.id);
+    const _shielded = (typeof stationStore !== "undefined" && stationStore.isReinforced) ? stationStore.isReinforced(_full) : false;
+    let _st = STATUS_SHORT[m.status];
+    if (m.status === "pre" && _shielded) _st = "🛡 PRE";
+    if (m.status === "warn" && typeof stationStore !== "undefined" && stationStore.getWarnSince) {
+      const _since = stationStore.getWarnSince(_full);
+      if (_since) {
+        let _diff = "medio";
+        try { const _d = localStorage.getItem("xonidu-difficulty-v1"); if (_d === "facil" || _d === "medio" || _d === "dificil") _diff = _d; } catch (e) {}
+        let _win = _diff === "facil" ? 30 : (_diff === "medio" ? 20 : 15);
+        if (_shielded) _win *= 2;
+        const _left = Math.max(0, Math.ceil(_win - (Date.now() - new Date(_since).getTime()) / 1000));
+        _st = "WARN " + _left + "s";
+      }
+    }
+    statusLine.textContent = _st;
     label.appendChild(nameLine);
     if (liveLine) label.appendChild(liveLine);
     label.appendChild(statusLine);
@@ -208,7 +242,11 @@ if (false && modFromUrl) {
 let ws;
 function conectarWS() {
   try {
-    ws = new WebSocket(`ws://localhost:${5001}`);
+    // v17 (tunel): el WS se deriva de la pagina, no de localhost.
+    const _proto = (typeof window !== "undefined" && window.location.protocol === "https:") ? "wss://" : "ws://";
+    const _host = (typeof window !== "undefined" && window.location.hostname) ? window.location.hostname : "localhost";
+    const _wsUrl = (_host === "localhost" || _host === "127.0.0.1") ? _proto + _host + ":5001" : _proto + window.location.host;
+    ws = new WebSocket(_wsUrl);
   } catch (e) {
     console.warn("No se pudo conectar al WebSocket:", e);
     return;

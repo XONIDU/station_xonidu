@@ -141,9 +141,9 @@ const DIFFICULTY_DEFAULT_COMPONENTS = {
   dificil: {}
 };
 const DIFFICULTY_PRESETS = {
-  facil:   { days: 5, min_per_day: 1, kp_warn: 5, kp_crit: 7, cme_speed_warn: 350, flr_min_class: "M", attend_window_min: 10, event_fresh_hours: 24 },
-  medio:   { days: 5, min_per_day: 2, kp_warn: 5, kp_crit: 7, cme_speed_warn: 350, flr_min_class: "M", attend_window_min: 5, event_fresh_hours: 96 },
-  dificil: { days: 5, min_per_day: 3, kp_warn: 4, kp_crit: 6, cme_speed_warn: 300, flr_min_class: "C", attend_window_min: 2, event_fresh_hours: 120 }
+  facil:   { days: 5, min_per_day: 1, kp_warn: 5, kp_crit: 7, cme_speed_warn: 350, flr_min_class: "M", attend_window_sec: 30, event_fresh_hours: 24 },
+  medio:   { days: 5, min_per_day: 2, kp_warn: 5, kp_crit: 7, cme_speed_warn: 350, flr_min_class: "M", attend_window_sec: 20, event_fresh_hours: 96 },
+  dificil: { days: 5, min_per_day: 3, kp_warn: 4, kp_crit: 6, cme_speed_warn: 300, flr_min_class: "C", attend_window_sec: 15, event_fresh_hours: 120 }
 };
 let difficulty = "medio";
 try {
@@ -160,7 +160,7 @@ function difficultyName() {
 // valores por defecto. El panel Metrics permite verla y cambiarla.
 const DEFAULT_CONFIG = {
   kp_warn: 5, kp_crit: 7, cme_speed_warn: 500, event_fresh_hours: 24,
-  attend_window_min: 5,
+  attend_window_sec: 20,
   score_base: 100, orbit_fit: 20, orbit_miss: -15,
   launcher_fit: 10, launcher_miss: -10,
   mass_penalty: -20, budget_penalty: -10, budget_cap: 500,
@@ -635,7 +635,7 @@ function renderDifficulty() {
       + " · " + t("difficultyKp") + " " + p.kp_warn + "/" + p.kp_crit
       + " · " + t("difficultyCme") + " " + p.cme_speed_warn + " km/s"
       + " · " + t("difficultyFlr") + " " + p.flr_min_class + "+"
-      + " · " + t("difficultyAttend") + " " + p.attend_window_min + " min"
+      + " · " + t("difficultyAttend") + " " + p.attend_window_sec + " s"
       + " · " + t("difficultyFresh") + " " + p.event_fresh_hours + " h</span>"
       + '<span class="diff-fails ' + failsCls + '">' + t(failsKey) + "</span></button>";
   });

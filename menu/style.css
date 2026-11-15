@@ -65,7 +65,16 @@ body{display:grid;place-items:center;overflow:hidden}
 .metrics-card code{background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px;font-family:ui-monospace,Consolas,monospace;font-size:13px;color:#8cd8f5}
 
 /* ---------- Botón Metrics (HTML, fuera de la imagen) ---------- */
-.top-right-btns{position:absolute;top:1.5%;right:1.5%;z-index:5;display:flex;gap:8px}
+.top-right-btns{position:absolute;top:1.5%;right:1.5%;z-index:5;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:70%}
+@media(max-width:820px){
+  /* v18: en el telefono los 4 botones de arriba (Metricas, Dificultad,
+     Componentes, Datos NASA) se apilan en 2 filas sin tapar la imagen. */
+  .top-right-btns{gap:6px;max-width:60%}
+  .top-right-btns .metrics-top-btn,.top-right-btns .diff-top-btn{font-size:12px;padding:6px 10px}
+  .lang-top-btn{font-size:12px;padding:6px 10px}
+  /* La tarjeta de detalle (paneles) ocupa casi toda la pantalla. */
+  .card{max-width:94vw}
+}
 .top-right-btns .metrics-top-btn,.top-right-btns .diff-top-btn{position:static}
 .metrics-top-btn{position:absolute;top:1.5%;right:1.5%;z-index:5;padding:clamp(6px,0.6cqw,12px) clamp(10px,1.2cqw,18px);border-radius:0.8cqw;
   border:1px solid #1e4a5a;background:rgba(8,14,28,.85);color:#dff6ff;cursor:pointer;
