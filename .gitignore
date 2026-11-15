@@ -24,6 +24,9 @@ ENV/
 env/
 .venv/
 
+# Environment variables (secret keys)
+.env
+
 # Local database and generated config
 db/
 game_config.json
