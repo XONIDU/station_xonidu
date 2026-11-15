@@ -180,3 +180,27 @@ body{display:grid;place-items:center;overflow:hidden}
   .detail{padding:10px}
   .card{max-width:100%;padding:16px}
 }
+
+
+/* =====================================================================
+   v21 — Idioma: en espanol se tapan los textos en ingles que trae
+   menu.png (subtitulo del banner y los 4 botones) con placas HTML.
+   Posiciones en cqw (1cqw = 1/100 del ancho de la imagen) para que
+   coincidan igual en PC y en el movil vertical.
+   ===================================================================== */
+.sub-patch{display:none;position:absolute;left:34cqw;top:5.5cqw;width:32cqw;height:2cqw;z-index:2;
+  align-items:center;justify-content:center;background:#284261;color:#b6f6fb;
+  font-size:1.5cqw;font-weight:800;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;
+  pointer-events:none;user-select:none}
+.btn svg{display:none;width:2.1cqw;height:2.1cqw;flex:0 0 auto}
+.stage.plates .sub-patch{display:flex}
+.stage.plates .btn{display:flex;align-items:center;justify-content:center;gap:1.1cqw;padding:0 1cqw;
+  background:#232b3e;border:2px solid rgba(144,189,208,.95);border-radius:.9cqw;
+  color:#bdf7f8;font-family:inherit;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+  font-size:1.5cqw;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.45)}
+.stage.plates .btn svg{display:block}
+.stage.plates .btn[data-id="start"]{background:#2b3348;font-size:2.1cqw;color:#7fe9ff;border-radius:1.1cqw}
+.stage.plates .btn[data-id="start"] svg{width:2.6cqw;height:2.6cqw}
+.stage.plates .btn:hover,.stage.plates .btn:focus-visible{background:#2f3d57;border-color:rgba(127,243,255,.95)}
+.stage.plates .btn:active{background:#3a4c6b}
+.stage.plates.debug .btn{border-color:rgba(255,0,0,.8)}

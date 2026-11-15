@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>XONIDU Station — Space Mission Design Game</title>
-  <link rel="stylesheet" href="style.css?v=15">
+  <link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
   <main id="stage" class="stage">
@@ -12,6 +12,10 @@
 
     <!-- Botones sobre la imagen (las posiciones están en app.js) -->
     <nav id="buttons" class="buttons" aria-label="Main menu"></nav>
+
+    <!-- Parche del subtitulo del banner: solo se muestra en espanol (la imagen
+         trae "SPACE MISSION DESIGN GAME" dibujado en ingles). -->
+    <div id="subPatch" class="sub-patch" aria-hidden="true"></div>
 
     <!-- Botón idioma (arriba a la izquierda). -->
     <button id="langBtn" class="lang-top-btn" type="button" aria-label="Elegir idioma">Idioma</button>
@@ -45,6 +49,6 @@
     </div>
   </section>
 
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>

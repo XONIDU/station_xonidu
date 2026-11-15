@@ -244,7 +244,7 @@ const STRINGS = {
     refreshFail: "No se pudieron actualizar los datos (revisa el servidor).",
     refreshPolling: "Actualizando datos de la NASA…",
     componentsTitle: "Componentes de la nave",
-    componentsSub: "Diseña tu nave: elige 1 opción por sistema. Cada elección mueve MASS, POWER, BUDGET, DATA y FUEL, y puntúa por encaje con la misión. Sin el instrumento clave o sin suficiente potencia o combustible, el diseño no es viable.",
+    componentsSub: "Diseña tu nave: elige 1 opción por sistema. Cada elección mueve MASA, ENERGÍA, PRESUPUESTO, DATOS y COMBUSTIBLE, y puntúa por encaje con la misión. Sin el instrumento clave o sin suficiente potencia o combustible, el diseño no es viable.",
     componentsCurrent: "Actual",
     componentsNotChosen: "sin elegir",
     componentsFuel: "Combustible",
@@ -319,7 +319,25 @@ const STRINGS = {
     difficultyFresh: "Eventos recientes (máx.)",
     difficultySaved: "Dificultad guardada ✓",
     difficultySavedLocal: "Guardado solo local (sin backend)",
-    difficultyLabel: "Dificultad"
+    difficultyLabel: "Dificultad",
+    diffDefEasy: "🧩 nave ya diseñada (6/6 sistemas)",
+    diffDefMedium: "🧩 3/6 sistemas listos",
+    diffDefHard: "🧩 tú diseñas la nave (0/6)",
+    diffMaxAnom: "máx. {n} anomalías a la vez",
+    winTitle: "⏱ Tiempo en amarillo antes de rojo",
+    winSub: "Segundos que un módulo pasa en warn (amarillo) sin atender antes de escalar a crit (rojo), para la dificultad elegida ({d}).",
+    winLabel: "Segundos en warn",
+    winSaveBtn: "💾 Guardar tiempo ({n} s)",
+    winSaving: "⏳ Guardando...",
+    winSavedServer: "✓ Guardado en el servidor: {d} = {n} s en amarillo",
+    winSavedLocal: "✓ Guardado en este dispositivo: {d} = {n} s en amarillo",
+    perDayKg: "kg/día",
+    fuelIn: "{need} kg en {d} días",
+    summaryFuel: "COMBUSTIBLE",
+    toastReset: "Otro jugador reinició la partida",
+    bannerSub: "Juego de diseño de misión espacial",
+    ariaLang: "Cambiar idioma",
+    ariaMenu: "Menú principal"
   },
   en: {
     appTitle: "XONIDU Station — Space Mission Design Game",
@@ -421,27 +439,135 @@ const STRINGS = {
     difficultyFresh: "Recent events (max)",
     difficultySaved: "Difficulty saved ✓",
     difficultySavedLocal: "Saved locally only (no backend)",
-    difficultyLabel: "Difficulty"
+    difficultyLabel: "Difficulty",
+    diffDefEasy: "🧩 spacecraft already designed (6/6 systems)",
+    diffDefMedium: "🧩 3/6 systems ready",
+    diffDefHard: "🧩 you design the spacecraft (0/6)",
+    diffMaxAnom: "max. {n} anomalies at once",
+    winTitle: "⏱ Time in yellow before red",
+    winSub: "Seconds a module stays in warn (yellow) unattended before escalating to crit (red), for the chosen difficulty ({d}).",
+    winLabel: "Seconds in warn",
+    winSaveBtn: "💾 Save time ({n} s)",
+    winSaving: "⏳ Saving...",
+    winSavedServer: "✓ Saved on the server: {d} = {n} s in yellow",
+    winSavedLocal: "✓ Saved on this device: {d} = {n} s in yellow",
+    perDayKg: "kg/day",
+    fuelIn: "{need} kg in {d} days",
+    summaryFuel: "FUEL",
+    toastReset: "Another player restarted the game",
+    bannerSub: "Space Mission Design Game",
+    ariaLang: "Change language",
+    ariaMenu: "Main menu"
   }
 };
 
 function t(key) { return STRINGS[LANG][key] || key; }
+// tf: igual que t() pero reemplaza {n}, {d}, {need}... por los valores dados.
+function tf(key, vars) {
+  let out = t(key);
+  Object.keys(vars || {}).forEach(k => { out = out.split("{" + k + "}").join(vars[k]); });
+  return out;
+}
+// L(es, en): devuelve el texto en el idioma activo (para frases con numeros).
+function L(es, en) { return LANG === "es" ? es : en; }
+
+/* ---- Nombres y descripciones traducibles ----
+   Los id en ingles (SATELLITE REPAIR, LEO, FALCON 9, MEDIUM BUS...) NO se
+   tocan: son las claves que guarda el juego y recibe el backend. Aqui solo
+   esta el texto que se MUESTRA. ES_TXT[id] = [nombre, descripcion|null]
+   (null = usar la descripcion que ya trae el dato). EN_DESC = descripcion
+   en ingles de los componentes (en el dato vienen en espanol). */
+const ES_TXT = {
+  "SATELLITE REPAIR": ["Reparación de satélite", "Acércate, captura un satélite con el brazo y repáralo. Mejor: LEO + Falcon 9. Al completar +200."],
+  "CARGO CAPTURE": ["Captura de carga", "Atrapa con el brazo una nave de carga Dragon / Cygnus y acóplala. Mejor: LEO + Falcon 9. Al completar +200."],
+  "SPACEWALK (EVA)": ["Caminata espacial (EVA)", "Los astronautas salen a reparar, instalar equipos o recoger muestras. Se aborta si hay tormenta solar. Mejor: LEO + Falcon 9. Al completar +200."],
+  "CUBESAT DEPLOY": ["Despliegue de CubeSat", "Diseña, despliega y rastrea un satélite pequeño desde la esclusa. Mejor: LEO + Falcon 9. Al completar +200, +DATOS."],
+  "MICROGRAVITY SCIENCE": ["Ciencia en microgravedad", "Cultivos Veggie / APH y combustión BASS / SAFFIRE. Mejor: LEO + Falcon 9. Al completar +200, +DATOS."],
+  "EARTH OBSERVATION": ["Observación de la Tierra", "Vigila incendios, huracanes e inundaciones y envía datos a los equipos en tierra. Mejor: polar o heliosíncrona + Falcon 9. Al completar +200, +DATOS."],
+  "MOON & MARS TECH": ["Tecnología Luna y Marte", "Prueba en la estación lo que necesitarán las futuras misiones a la Luna y a Marte. Las 6 zonas. Mejor: LEO (variante heliocéntrica) + Atlas V. Al completar +300."],
+  "SATELLITE LIFE EXTENSION": ["Extensión de vida de satélite", "Acóplate a un satélite viejo para reabastecerlo o cambiarle piezas. Mejor: GEO + Atlas V o Ariane 5. Al completar +200."],
+  "ASTRONOMY": ["Astronomía", "Observa el espacio desde la órbita, con menos interferencia de la atmósfera. Mejor: LEO + Falcon 9. Al completar +200, +DATOS."],
+  "LEO": ["LEO (órbita baja)", "Órbita terrestre baja · 400 km · reabastecimiento fácil."],
+  "GEO": ["GEO (geoestacionaria)", "Órbita geoestacionaria · 35.786 km · cobertura constante."],
+  "HELIOCENTRIC": ["Heliocéntrica", "Heliocéntrica · más allá de la órbita terrestre · el mayor riesgo."],
+  "POLAR": ["Polar", "Órbita polar · 800 km · pasa sobre los polos y cubre toda la Tierra."],
+  "SUN-SYNCHRONOUS": ["Heliosíncrona", "Órbita heliosíncrona · 600 km · misma luz solar en cada pasada, ideal para imágenes de la Tierra."],
+  "FALCON 9": ["Falcon 9", "Capacidad 22 t · costo 90 cr."],
+  "ATLAS V": ["Atlas V", "Capacidad 18 t · costo 140 cr."],
+  "ARIANE 5": ["Ariane 5", "Capacidad 20 t · costo 160 cr."],
+  "SMALLSAT": ["Satélite pequeño", null], "MEDIUM BUS": ["Bus mediano", null], "LARGE BUS": ["Bus grande", null],
+  "CAMERA": ["Cámara", null], "SPECTROMETER": ["Espectrómetro", null], "TELESCOPE": ["Telescopio", null], "SENSOR SUITE": ["Suite de sensores", null],
+  "SOLAR PANELS": ["Paneles solares", null], "SOLAR + BATTERY": ["Solar + batería", null], "RTG": ["RTG (generador nuclear)", null],
+  "S-BAND": ["Banda S", null], "X-BAND": ["Banda X", null], "KA-BAND": ["Banda Ka", null],
+  "PASSIVE RADIATORS": ["Radiadores pasivos", null], "ACTIVE THERMAL": ["Térmico activo", null],
+  "NONE": ["Ninguna", null], "CHEMICAL": ["Química", null], "ELECTRIC": ["Eléctrica", null]
+};
+const EN_DESC = {
+  "SMALLSAT": "Small and cheap; low capacity.",
+  "MEDIUM BUS": "Balanced; the station standard.",
+  "LARGE BUS": "Large capacity; heavy and expensive.",
+  "CAMERA": "Multispectral camera; ideal for observing Earth.",
+  "SPECTROMETER": "Spectrometer; analyzes the composition of samples and atmospheres.",
+  "TELESCOPE": "Telescope; observes deep space (not suited to UV light).",
+  "SENSOR SUITE": "Sensor suite; general measurements of all kinds.",
+  "SOLAR PANELS": "Solar panels; energy from the Sun, free in LEO.",
+  "SOLAR + BATTERY": "Panels + batteries; power in the shade too.",
+  "RTG": "Nuclear generator (RTG); constant power far from the Sun.",
+  "S-BAND": "S-band; basic, low data rate.",
+  "X-BAND": "X-band; the ISS standard.",
+  "KA-BAND": "Ka-band; high speed, more power.",
+  "PASSIVE RADIATORS": "Passive radiators; simple, enough in LEO.",
+  "ACTIVE THERMAL": "Radiators + heaters; active control for extreme orbits.",
+  "NONE": "No propulsion; station only, no maneuvers.",
+  "CHEMICAL": "Chemical; strong thrust, burns a lot of fuel.",
+  "ELECTRIC": "Electric (ion); efficient, slow thrust."
+};
+const SYS_EN = { spacecraft:"Spacecraft", instruments:"Scientific instruments", power:"Power system",
+  comms:"Communications", thermal:"Thermal control", propulsion:"Propulsion" };
+function nmId(id) { return (LANG === "es" && ES_TXT[id]) ? ES_TXT[id][0] : id; }
+function nm(o) { return nmId(o.id); }
+function ds(o) {
+  if (LANG === "es") { const e = ES_TXT[o.id]; return (e && e[1]) || o.desc; }
+  return EN_DESC[o.id] || o.desc;
+}
+function sysName(sys) { return LANG === "es" ? sys.name : (SYS_EN[sys.key] || sys.name); }
+// "MASA x t · ENERGÍA y kW · PRESUPUESTO z cr · DATOS w mb · COMBUSTIBLE f kg"
+function resLine(res, ct) {
+  return t("summaryMass") + " " + fmt1(res.masa) + " t · " + t("summaryPower") + " " + (res.potencia > 0 ? "+" : "") + fmt1(res.potencia) + " kW · "
+    + t("summaryBudget") + " " + res.presupuesto + " cr · " + t("summaryData") + " " + res.datos + " mb · "
+    + t("summaryFuel") + " " + ct.combustible + " kg";
+}
+// Iconos de las placas de los botones (solo se ven en espanol, ver style.css).
+const BTN_ICONS = {
+  objectives: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 9l1.5 1.5L12 8M8 15l1.5 1.5L12 14M14 9.5h3M14 15.5h3"/></svg>',
+  orbit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><ellipse cx="12" cy="12" rx="10" ry="3.5" transform="rotate(-20 12 12)"/></svg>',
+  launch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c3 2.5 4.5 6 4.5 9.5V16h-9v-4.5C7.5 8 9 4.5 12 2z"/><circle cx="12" cy="9" r="1.6"/><path d="M7.5 13l-3 3.5V20l3-1.5M16.5 13l3 3.5V20l-3-1.5M10 19c0 1.5.8 3 2 3s2-1.5 2-3"/></svg>',
+  start: '<svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>'
+};
 
 function applyLang() {
   document.title = t("appTitle");
   document.documentElement.lang = LANG;
+  // En espanol la imagen (menu.png) sigue trayendo los textos en ingles
+  // dibujados: se tapan con placas HTML (clase "plates") con el mismo estilo.
+  const stageEl = $("#stage");
+  if (stageEl) stageEl.classList.toggle("plates", LANG === "es");
+  const subPatch = $("#subPatch");
+  if (subPatch) subPatch.textContent = t("bannerSub");
+  const btnNav = $("#buttons");
+  if (btnNav) btnNav.setAttribute("aria-label", t("ariaMenu"));
   BUTTONS.forEach(b => {
     const el = $("#buttons .btn[data-id='" + b.id + "']");
-    if (el) el.textContent = t(b.key);
+    if (el) { el.innerHTML = (BTN_ICONS[b.id] || "") + "<span>" + t(b.key) + "</span>"; el.setAttribute("aria-label", t(b.key)); }
     const mel = $("#mobileMenu .mm-btn[data-id='" + b.id + "']");
-    if (mel) mel.textContent = t(b.key);
+    if (mel) { mel.textContent = t(b.key); mel.setAttribute("aria-label", t(b.key)); }
   });
   HUD.forEach(h => {
     const el = $(".cell[data-id='" + h.id + "'] .lbl");
     if (el) el.textContent = t(h.key);
   });
   const langBtn = $("#langBtn");
-  if (langBtn) langBtn.textContent = LANG === "es" ? t("langEnglish") : t("langSpanish");
+  if (langBtn) { langBtn.textContent = LANG === "es" ? t("langEnglish") : t("langSpanish"); langBtn.setAttribute("aria-label", t("ariaLang")); }
   const diffBtn = $("#diffTopBtn");
   if (diffBtn) diffBtn.textContent = t("btnDifficultyTop");
   const metricsBtnTop = $("#metricsTopBtn");
@@ -452,6 +578,8 @@ function applyLang() {
   if (refreshBtnTop) refreshBtnTop.textContent = t("btnRefreshTop");
   const backBtn = $("#backBtn");
   if (backBtn) backBtn.textContent = t("btnBack");
+  const mBtnLang = document.getElementById("metricsBtn");
+  if (mBtnLang) mBtnLang.textContent = t("btnMetrics");
   if (!$("#detail").hidden) route();
   syncHud();
 }
@@ -472,16 +600,24 @@ function computeMissionScore(cfg) {
   if (cfg.objetivo && cfg.orbita) {
     const good = cfg.objetivo.orbits || [cfg.objetivo.orbit];
     if (good.indexOf(cfg.orbita.id) !== -1) {
-      score += CFG.orbit_fit; notes.push("Orbit fits the mission (+" + CFG.orbit_fit + ").");
+      score += CFG.orbit_fit;
+      notes.push(L("La órbita encaja con la misión (+" + CFG.orbit_fit + ").", "Orbit fits the mission (+" + CFG.orbit_fit + ")."));
     } else {
-      score += CFG.orbit_miss; notes.push("Orbit does not fit " + cfg.objetivo.id + " (best: " + good.join(" / ") + ", " + CFG.orbit_miss + ").");
+      score += CFG.orbit_miss;
+      const goodTxt = good.map(nmId).join(" / ");
+      notes.push(L("La órbita no encaja con " + nm(cfg.objetivo) + " (mejor: " + goodTxt + ", " + CFG.orbit_miss + ").",
+                   "Orbit does not fit " + nm(cfg.objetivo) + " (best: " + goodTxt + ", " + CFG.orbit_miss + ")."));
     }
   }
   if (cfg.objetivo && cfg.lanzador) {
     if (cfg.objetivo.launcher.indexOf(cfg.lanzador.id) !== -1) {
-      score += CFG.launcher_fit; notes.push("Launcher fits the mission (+" + CFG.launcher_fit + ").");
+      score += CFG.launcher_fit;
+      notes.push(L("El lanzador encaja con la misión (+" + CFG.launcher_fit + ").", "Launcher fits the mission (+" + CFG.launcher_fit + ")."));
     } else {
-      score += CFG.launcher_miss; notes.push("Launcher does not fit " + cfg.objetivo.id + " (best: " + cfg.objetivo.launcher.join(" or ") + ", " + CFG.launcher_miss + ").");
+      score += CFG.launcher_miss;
+      const goodL = cfg.objetivo.launcher.map(nmId).join(L(" o ", " or "));
+      notes.push(L("El lanzador no encaja con " + nm(cfg.objetivo) + " (mejor: " + goodL + ", " + CFG.launcher_miss + ").",
+                   "Launcher does not fit " + nm(cfg.objetivo) + " (best: " + goodL + ", " + CFG.launcher_miss + ")."));
     }
   }
   // Componentes: instrumento clave de la mision (+20), potencia neta y
@@ -489,10 +625,12 @@ function computeMissionScore(cfg) {
   // que genera el sistema de potencia; si es positiva falta energia.
   if (cfg.objetivo && cfg.objetivo.instrumento) {
     const inst = compOption("instruments");
+    const instName = nmId(cfg.objetivo.instrumento);
     if (inst && inst.id === cfg.objetivo.instrumento) {
-      score += 20; notes.push("Key instrument for this mission: " + inst.id + " (+20).");
+      score += 20;
+      notes.push(L("Instrumento clave de esta misión: " + instName + " (+20).", "Key instrument for this mission: " + instName + " (+20)."));
     } else {
-      notes.push("This mission works best with " + cfg.objetivo.instrumento + " (pick it in Components).");
+      notes.push(L("Esta misión funciona mejor con " + instName + " (elígelo en Componentes).", "This mission works best with " + instName + " (pick it in Components)."));
     }
   }
   // Potencia: solo se penaliza si YA eligio un sistema de potencia y
@@ -503,10 +641,11 @@ function computeMissionScore(cfg) {
       const netPower = cfg.orbita.potencia + ct.potencia;
       if (netPower > 0) {
         score -= 20; feasible = false;
-        notes.push("Not enough power: the mission needs " + cfg.orbita.potencia + " kW and the power system generates " + (-ct.potencia) + " kW (deficit " + netPower + " kW).");
+        notes.push(L("Falta energía: la misión necesita " + cfg.orbita.potencia + " kW y el sistema de potencia genera " + (-ct.potencia) + " kW (déficit " + netPower + " kW).",
+                     "Not enough power: the mission needs " + cfg.orbita.potencia + " kW and the power system generates " + (-ct.potencia) + " kW (deficit " + netPower + " kW)."));
       }
     } else {
-      notes.push("Pick a power system in Components.");
+      notes.push(L("Elige un sistema de potencia en Componentes.", "Pick a power system in Components."));
     }
   }
   // Propulsion: solo se penaliza si YA eligio (incluido NONE) y es
@@ -516,23 +655,28 @@ function computeMissionScore(cfg) {
     if (prop) {
       if (prop.id === "NONE") {
         score -= 20; feasible = false;
-        notes.push("This mission needs propulsion to rendezvous/dock (pick one in Components).");
+        notes.push(L("Esta misión necesita propulsión para acercarse y acoplarse (elige una en Componentes).", "This mission needs propulsion to rendezvous/dock (pick one in Components)."));
       } else if (prop.combustible < prop.consumo * missionDays) {
         score -= 20; feasible = false;
-        notes.push("Not enough fuel: " + prop.combustible + " kg on board, the mission needs " + (prop.consumo * missionDays) + " kg (" + prop.consumo + " kg/day × " + missionDays + " days).");
+        notes.push(L("Combustible insuficiente: hay " + prop.combustible + " kg a bordo y la misión necesita " + (prop.consumo * missionDays) + " kg (" + prop.consumo + " kg/día × " + missionDays + " días).",
+                     "Not enough fuel: " + prop.combustible + " kg on board, the mission needs " + (prop.consumo * missionDays) + " kg (" + prop.consumo + " kg/day × " + missionDays + " days)."));
       }
     } else {
-      notes.push("This mission needs propulsion (pick one in Components).");
+      notes.push(L("Esta misión necesita propulsión (elígela en Componentes).", "This mission needs propulsion (pick one in Components)."));
     }
   }
   if (cfg.orbita && cfg.lanzador) {
     const totalMass = cfg.orbita.masa + ct.masa;
     if (totalMass > cfg.lanzador.capacidad) {
       score += CFG.mass_penalty; feasible = false;
-      notes.push("Launcher cannot lift the mission mass (" + totalMass.toFixed(1) + " t > " + cfg.lanzador.capacidad + " t).");
+      notes.push(L("El lanzador no puede levantar la masa de la misión (" + totalMass.toFixed(1) + " t > " + cfg.lanzador.capacidad + " t).",
+                   "Launcher cannot lift the mission mass (" + totalMass.toFixed(1) + " t > " + cfg.lanzador.capacidad + " t)."));
     }
     const cost = cfg.orbita.presupuesto + cfg.lanzador.costo + ct.presupuesto;
-    if (cost > CFG.budget_cap) { score += CFG.budget_penalty; notes.push("Budget overrun: " + cost + " cr (cap " + CFG.budget_cap + " cr)."); }
+    if (cost > CFG.budget_cap) {
+      score += CFG.budget_penalty;
+      notes.push(L("Presupuesto excedido: " + cost + " cr (tope " + CFG.budget_cap + " cr).", "Budget overrun: " + cost + " cr (cap " + CFG.budget_cap + " cr)."));
+    }
   }
   return { score: Math.max(0, score), feasible, notes };
 }
@@ -669,7 +813,7 @@ function renderDifficulty() {
     const failsKey = key === "facil" ? "difficultyFailsFew" : key === "medio" ? "difficultyFailsNormal" : "difficultyFailsMany";
     const failsCls = key === "facil" ? "easy" : key === "medio" ? "medium" : "hard";
     const nameKey = key === "facil" ? "difficultyEasy" : key === "medio" ? "difficultyMedium" : "difficultyHard";
-    const defaultsTxt = key === "facil" ? "🧩 nave ya diseñada (6/6 sistemas)" : key === "medio" ? "🧩 3/6 sistemas listos" : "🧩 tú diseñas la nave (0/6)";
+    const defaultsTxt = t(key === "facil" ? "diffDefEasy" : key === "medio" ? "diffDefMedium" : "diffDefHard");
     html += '<button type="button" class="diff-opt' + (key === difficulty ? " sel" : "") + '" data-id="' + key + '">'
       + '<span class="diff-name">' + t(nameKey) + (key === difficulty ? " · " + t("difficultyCurrent") : "") + '</span>'
       + '<span class="diff-line">' + defaultsTxt + " · " + p.days + " " + t("difficultyDays") + " · " + p.min_per_day + " " + t("difficultyMinPerDay")
@@ -677,7 +821,7 @@ function renderDifficulty() {
       + " · " + t("difficultyCme") + " " + p.cme_speed_warn + " km/s"
       + " · " + t("difficultyFlr") + " " + p.flr_min_class + "+"
       + " · " + t("difficultyAttend") + " " + effectiveWindow(key) + " s"
-      + " · máx. " + (p.max_anomalies || 2) + " anomalías a la vez"
+      + " · " + tf("diffMaxAnom", { n: (p.max_anomalies || 2) })
       + " · " + t("difficultyFresh") + " " + p.event_fresh_hours + " h</span>"
       + '<span class="diff-fails ' + failsCls + '">' + t(failsKey) + "</span></button>";
   });
@@ -686,13 +830,13 @@ function renderDifficulty() {
   // rojo (crit) de la dificultad elegida, sin tocar codigo. Se guarda por
   // dificultad y manda sobre el preset (facil 120 / medio 80 / dificil 60).
   const curWin = effectiveWindow(difficulty);
-  html += '<h3 class="ms-h">⏱ Tiempo en amarillo antes de rojo</h3>'
-    + '<p class="ms-sub">Segundos que un módulo pasa en warn (amarillo) sin atender antes de escalar a crit (rojo), para la dificultad elegida (' + difficultyName() + ').</p>'
-    + '<label class="ms-field"><span>Segundos en warn</span>'
+  html += '<h3 class="ms-h">' + t("winTitle") + '</h3>'
+    + '<p class="ms-sub">' + tf("winSub", { d: difficultyName() }) + '</p>'
+    + '<label class="ms-field"><span>' + t("winLabel") + '</span>'
     + '<input type="number" id="winNum" min="5" max="120" value="' + curWin + '">'
     + '<input type="range" id="winRange" min="5" max="120" value="' + curWin + '">'
     + '<em>s</em></label>'
-    + '<button type="button" id="winSave" class="ms-save">💾 Guardar tiempo (' + curWin + ' s)</button>'
+    + '<button type="button" id="winSave" class="ms-save">' + tf("winSaveBtn", { n: curWin }) + '</button>'
     + '<span id="winSaved" class="ms-saved"></span>';
   box.innerHTML = html;
   box.querySelectorAll(".diff-opt").forEach(btn => {
@@ -705,7 +849,7 @@ function renderDifficulty() {
     if (winNum) winNum.value = n;
     if (winRange) winRange.value = n;
     const saveBtn = box.querySelector("#winSave");
-    if (saveBtn) saveBtn.textContent = "💾 Guardar tiempo (" + n + " s)";
+    if (saveBtn) saveBtn.textContent = tf("winSaveBtn", { n: n });
     return n;
   };
   if (winNum) winNum.addEventListener("input", () => syncWin(winNum.value));
@@ -714,7 +858,7 @@ function renderDifficulty() {
   if (winSave) winSave.addEventListener("click", () => {
     const v = syncWin(winNum ? winNum.value : curWin);
     winSave.disabled = true;
-    winSave.textContent = "⏳ Guardando...";
+    winSave.textContent = t("winSaving");
     setCustomWindow(difficulty, v);
     CFG.attend_window_sec = v;
     try { localStorage.setItem(CONFIG_KEY, JSON.stringify(CFG)); } catch (e) {}
@@ -724,9 +868,7 @@ function renderDifficulty() {
       // re-render borra el mensaje y parece que el boton no hace nada.
       renderDifficulty();
       const msg = document.querySelector("#winSaved");
-      if (msg) msg.textContent = okServer
-        ? "✓ Guardado en el servidor: " + difficultyName() + " = " + v + " s en amarillo"
-        : "✓ Guardado en este dispositivo: " + difficultyName() + " = " + v + " s en amarillo";
+      if (msg) msg.textContent = tf(okServer ? "winSavedServer" : "winSavedLocal", { d: difficultyName(), n: v });
     };
     fetch("/api/config", { method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -825,16 +967,14 @@ function optionList(title, sub, options, currentId, onPick, extraHtml) {
   let html = '<p class="ms-sub">' + sub + "</p>";
   options.forEach(opt => {
     html += '<button type="button" class="ms-opt' + (opt.id === currentId ? " sel" : "") +
-      '" data-id="' + opt.id + '"><b>' + opt.id + "</b><span>" + opt.desc + "</span></button>";
+      '" data-id="' + opt.id + '"><b>' + nm(opt).toUpperCase() + "</b><span>" + ds(opt) + "</span></button>";
   });
   if (extraHtml) html += extraHtml;
   const cfg = currentConfig();
   const result = computeMissionScore(cfg);
   const res = resourcesOf(cfg);
   const ct = compTotals();
-  let summary = 'SCORE: <b>' + result.score + "</b> &nbsp;·&nbsp; MASS: " + res.masa.toFixed(1) +
-    " t &nbsp;·&nbsp; POWER: " + res.potencia.toFixed(1) + " kW &nbsp;·&nbsp; BUDGET: " + res.presupuesto +
-    " cr &nbsp;·&nbsp; DATA: " + res.datos + " mb &nbsp;·&nbsp; FUEL: " + ct.combustible + " kg";
+  let summary = t("summaryScore") + ': <b>' + result.score + "</b> &nbsp;·&nbsp; " + resLine(res, ct).split(" · ").join(" &nbsp;·&nbsp; ");
   if (typeof missionDays === "number") {
     summary += ' &nbsp;·&nbsp; <b>' + t("summaryDuration") + ': ' + missionDays + ' ' + t("objectivesDays") + '</b>';
   }
@@ -976,20 +1116,20 @@ function renderComponents() {
   let html = '<p class="ms-sub">' + t("componentsSub") + "</p>";
   COMPONENT_SYSTEMS.forEach(sys => {
     const cur = comp[sys.key] || null;
-    html += '<h3 class="ms-h">' + sys.name + "</h3>";
+    html += '<h3 class="ms-h">' + sysName(sys) + "</h3>";
     sys.options.forEach(o => {
       const isCur = cur === o.id;
       html += '<button type="button" class="ms-opt' + (isCur ? " sel" : "") + '" data-sys="' + sys.key + '" data-id="' + o.id + '">'
-        + "<b>" + o.id + (isCur ? " · " + t("componentsCurrent") : "") + "</b>"
-        + "<span>" + o.desc + "</span>"
-        + '<span class="diff-line">MASS ' + o.masa + " t · POWER " + (o.potencia > 0 ? "+" : "") + o.potencia + " kW · BUDGET " + o.presupuesto + " cr · DATA " + o.datos + " mb"
-        + (o.combustible ? " · FUEL " + o.combustible + " kg (" + o.consumo + " kg/día)" : "")
+        + "<b>" + nm(o).toUpperCase() + (isCur ? " · " + t("componentsCurrent") : "") + "</b>"
+        + "<span>" + ds(o) + "</span>"
+        + '<span class="diff-line">' + t("summaryMass") + " " + o.masa + " t · " + t("summaryPower") + " " + (o.potencia > 0 ? "+" : "") + o.potencia + " kW · " + t("summaryBudget") + " " + o.presupuesto + " cr · " + t("summaryData") + " " + o.datos + " mb"
+        + (o.combustible ? " · " + t("summaryFuel") + " " + o.combustible + " kg (" + o.consumo + " " + t("perDayKg") + ")" : "")
         + "</span></button>";
     });
   });
   const ct = compTotals();
   const res = resourcesOf(currentConfig());
-  html += '<div class="ms-summary"><b>' + t("componentsSummary") + ":</b> MASS " + res.masa.toFixed(1) + " t · POWER " + (res.potencia > 0 ? "+" : "") + res.potencia.toFixed(1) + " kW · BUDGET " + res.presupuesto + " cr · DATA " + res.datos + " mb · FUEL " + ct.combustible + " kg (" + t("componentsFuelNeed") + " " + ct.consumo * missionDays + " kg en " + missionDays + " días)</div>";
+  html += '<div class="ms-summary"><b>' + t("componentsSummary") + ":</b> " + resLine(res, ct) + " (" + t("componentsFuelNeed") + " " + tf("fuelIn", { need: ct.consumo * missionDays, d: missionDays }) + ")</div>";
   html += '<p class="ms-sub" id="compMsg"></p>';
   box.innerHTML = html;
   box.querySelectorAll(".ms-opt").forEach(btn => {
@@ -1072,9 +1212,9 @@ function renderMetrics() {
     + '<p class="ms-sub">' + (en ? "What you picked in the Components panel (🧩 button). Each system adds to the resources and the score: key instrument +20; without power or fuel the design is not feasible." : "Lo que elegiste en el panel Componentes (botón 🧩). Cada sistema suma a los recursos y al puntaje: instrumento clave +20; sin potencia o sin combustible el diseño no es viable.") + '</p>'
     + COMPONENT_SYSTEMS.map(sys => {
         const o = compOption(sys.key);
-        return "<p><strong>" + sys.name + ":</strong> " + (o ? o.id + " (MASS " + o.masa + " t · POWER " + o.potencia + " kW · BUDGET " + o.presupuesto + " cr · DATA " + o.datos + " mb" + (o.combustible ? " · FUEL " + o.combustible + " kg" : "") + ")" : (en ? "not chosen" : "sin elegir")) + "</p>";
+        return "<p><strong>" + sysName(sys) + ":</strong> " + (o ? nm(o) + " (" + t("summaryMass") + " " + o.masa + " t · " + t("summaryPower") + " " + o.potencia + " kW · " + t("summaryBudget") + " " + o.presupuesto + " cr · " + t("summaryData") + " " + o.datos + " mb" + (o.combustible ? " · " + t("summaryFuel") + " " + o.combustible + " kg" : "") + ")" : t("componentsNotChosen")) + "</p>";
       }).join("")
-    + '<p><strong>' + (en ? "Design totals:" : "Totales del diseño:") + '</strong> MASS ' + res.masa.toFixed(1) + " t · POWER " + res.potencia.toFixed(1) + " kW · BUDGET " + res.presupuesto + " cr · DATA " + res.datos + " mb · FUEL " + ct.combustible + " kg (" + (en ? "needs " : "necesita ") + ct.consumo * missionDays + (en ? " kg in " : " kg en ") + missionDays + (en ? " days)" : " días)") + "</p>";
+    + '<p><strong>' + (en ? "Design totals:" : "Totales del diseño:") + '</strong> ' + resLine(res, ct) + " (" + t("componentsFuelNeed") + " " + tf("fuelIn", { need: ct.consumo * missionDays, d: missionDays }) + ")</p>";
   const msConfig = $("#ms-config");
   if (msConfig) {
     const div = document.createElement("div");
@@ -1255,6 +1395,6 @@ function syncHud() {
 syncHud(); route(); applyLang();
 
 window.addEventListener("station:missionreset", () => {
-  showToast("Otro jugador reinició la partida");
+  showToast(t("toastReset"));
   setTimeout(() => location.reload(), 1000);
 });
