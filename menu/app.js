@@ -110,7 +110,7 @@ const LAUNCHERS = [
 const STORE_KEY = "xonidu-mission-v1";
 // v19.2: segundos en warn (amarillo) antes de crit (rojo) que el usuario
 // cambio a mano, por dificultad. Si hay uno guardado, manda sobre el
-// preset (facil 60 / medio 40 / dificil 30) y sobrevive a cambiar de
+// preset (facil 120 / medio 80 / dificil 60) y sobrevive a cambiar de
 // dificultad y a reiniciar el servidor (se re-aplica al elegir dificultad).
 const CUSTOM_WINDOW_KEY = "xonidu-attend-window-v1";
 function getCustomWindow(key) {
@@ -143,7 +143,7 @@ try {
 } catch (e) { /* primera partida */ }
 
 // Duracion de la mision (deslizador de la vista Objetivos). Se recuerda.
-let missionDays = 7;
+let missionDays = 5;   // = dias de la dificultad por defecto (Medio)
 try {
   const saved = Number(localStorage.getItem(MISSION_DAYS_KEY));
   if (!isNaN(saved) && saved >= 1 && saved <= 30) missionDays = saved;
@@ -164,9 +164,9 @@ const DIFFICULTY_DEFAULT_COMPONENTS = {
   dificil: {}
 };
 const DIFFICULTY_PRESETS = {
-  facil:   { days: 5, min_per_day: 1, kp_warn: 5, kp_crit: 7, cme_speed_warn: 350, flr_min_class: "M", attend_window_sec: 60, event_fresh_hours: 24 },
-  medio:   { days: 5, min_per_day: 2, kp_warn: 5, kp_crit: 7, cme_speed_warn: 350, flr_min_class: "M", attend_window_sec: 40, event_fresh_hours: 96 },
-  dificil: { days: 5, min_per_day: 3, kp_warn: 4, kp_crit: 6, cme_speed_warn: 300, flr_min_class: "C", attend_window_sec: 30, event_fresh_hours: 120 }
+  facil:   { days: 5, min_per_day: 1, kp_warn: 6, kp_crit: 8, cme_speed_warn: 500, flr_min_class: "M", attend_window_sec: 120, event_fresh_hours: 24, max_anomalies: 2 },
+  medio:   { days: 5, min_per_day: 2, kp_warn: 6, kp_crit: 8, cme_speed_warn: 500, flr_min_class: "M", attend_window_sec: 80, event_fresh_hours: 96, max_anomalies: 2 },
+  dificil: { days: 5, min_per_day: 3, kp_warn: 5, kp_crit: 7, cme_speed_warn: 450, flr_min_class: "M", attend_window_sec: 60, event_fresh_hours: 120, max_anomalies: 3 }
 };
 let difficulty = "medio";
 try {
@@ -183,7 +183,7 @@ function difficultyName() {
 // valores por defecto. El panel Metrics permite verla y cambiarla.
 const DEFAULT_CONFIG = {
   kp_warn: 5, kp_crit: 7, cme_speed_warn: 500, event_fresh_hours: 24,
-  attend_window_sec: 40,
+  attend_window_sec: 80, max_anomalies: 2,
   score_base: 100, orbit_fit: 20, orbit_miss: -15,
   launcher_fit: 10, launcher_miss: -10,
   mass_penalty: -20, budget_penalty: -10, budget_cap: 500,
@@ -433,6 +433,8 @@ function applyLang() {
   BUTTONS.forEach(b => {
     const el = $("#buttons .btn[data-id='" + b.id + "']");
     if (el) el.textContent = t(b.key);
+    const mel = $("#mobileMenu .mm-btn[data-id='" + b.id + "']");
+    if (mel) mel.textContent = t(b.key);
   });
   HUD.forEach(h => {
     const el = $(".cell[data-id='" + h.id + "'] .lbl");
@@ -598,6 +600,22 @@ BUTTONS.forEach(b => {
   });
   $("#buttons").appendChild(el);
 });
+// v19.3: botones grandes para el movil en vertical (los mismos 4 del menu,
+// mismo texto y mismo click). Solo se ven en portrait <=820px (CSS).
+BUTTONS.forEach(b => {
+  const nav = $("#mobileMenu");
+  if (!nav) return;
+  const el = document.createElement("button");
+  el.type = "button"; el.className = "mm-btn" + (b.id === "start" ? " start" : "");
+  el.dataset.id = b.id;
+  el.setAttribute("aria-label", t(b.key));
+  el.textContent = t(b.key);
+  el.addEventListener("click", () => {
+    if (b.url) { startMission(b.url); return; }
+    location.hash = b.id;
+  });
+  nav.appendChild(el);
+});
 
 // START MISSION: arranca el reloj de la mision en el backend (dia 1 de N)
 // y luego navega al mapa. Si no hay backend, se navega igual.
@@ -658,14 +676,15 @@ function renderDifficulty() {
       + " · " + t("difficultyKp") + " " + p.kp_warn + "/" + p.kp_crit
       + " · " + t("difficultyCme") + " " + p.cme_speed_warn + " km/s"
       + " · " + t("difficultyFlr") + " " + p.flr_min_class + "+"
-      + " · " + t("difficultyAttend") + " " + p.attend_window_sec + " s"
+      + " · " + t("difficultyAttend") + " " + effectiveWindow(key) + " s"
+      + " · máx. " + (p.max_anomalies || 2) + " anomalías a la vez"
       + " · " + t("difficultyFresh") + " " + p.event_fresh_hours + " h</span>"
       + '<span class="diff-fails ' + failsCls + '">' + t(failsKey) + "</span></button>";
   });
   html += '<p class="ms-sub" id="diffMsg"></p>';
   // v19.2: control para cambiar los segundos en amarillo (warn) antes de
   // rojo (crit) de la dificultad elegida, sin tocar codigo. Se guarda por
-  // dificultad y manda sobre el preset (facil 60 / medio 40 / dificil 30).
+  // dificultad y manda sobre el preset (facil 120 / medio 80 / dificil 60).
   const curWin = effectiveWindow(difficulty);
   html += '<h3 class="ms-h">⏱ Tiempo en amarillo antes de rojo</h3>'
     + '<p class="ms-sub">Segundos que un módulo pasa en warn (amarillo) sin atender antes de escalar a crit (rojo), para la dificultad elegida (' + difficultyName() + ').</p>'
@@ -694,22 +713,27 @@ function renderDifficulty() {
   const winSave = box.querySelector("#winSave");
   if (winSave) winSave.addEventListener("click", () => {
     const v = syncWin(winNum ? winNum.value : curWin);
+    winSave.disabled = true;
+    winSave.textContent = "⏳ Guardando...";
     setCustomWindow(difficulty, v);
     CFG.attend_window_sec = v;
     try { localStorage.setItem(CONFIG_KEY, JSON.stringify(CFG)); } catch (e) {}
+    const done = (okServer) => {
+      // Re-renderizar PRIMERO (actualiza las opciones con la ventana nueva)
+      // y poner el mensaje DESPUES, sobre los elementos nuevos: si no, el
+      // re-render borra el mensaje y parece que el boton no hace nada.
+      renderDifficulty();
+      const msg = document.querySelector("#winSaved");
+      if (msg) msg.textContent = okServer
+        ? "✓ Guardado en el servidor: " + difficultyName() + " = " + v + " s en amarillo"
+        : "✓ Guardado en este dispositivo: " + difficultyName() + " = " + v + " s en amarillo";
+    };
     fetch("/api/config", { method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ attend_window_sec: v }) })
       .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        const msg = box.querySelector("#winSaved");
-        if (msg) msg.textContent = (d && d.ok) ? "✓ Guardado en el servidor (" + v + " s)" : "✓ Guardado en este dispositivo (" + v + " s)";
-        renderDifficulty();
-      }).catch(() => {
-        const msg = box.querySelector("#winSaved");
-        if (msg) msg.textContent = "✓ Guardado en este dispositivo (" + v + " s)";
-        renderDifficulty();
-      });
+      .then(d => done(!!(d && d.ok)))
+      .catch(() => done(false));
   });
 }
 
@@ -843,63 +867,104 @@ function optionList(title, sub, options, currentId, onPick, extraHtml) {
   }
 }
 
-const METRICS_HTML_ES = `
+// El texto se construye con los valores REALES (CFG y presets de dificultad),
+// asi nunca se desfasa de lo que hace el juego. Unidades como en la barra
+// inferior: MASA en t, ENERGIA en kW, PRESUPUESTO en cr, DATOS en mb.
+function metricsHtml() {
+  const en = LANG === "en", P = DIFFICULTY_PRESETS;
+  const per = (f) => (en ? "Easy " : "Fácil ") + f("facil") + " · " + (en ? "Medium " : "Medio ") + f("medio")
+    + " · " + (en ? "Hard " : "Difícil ") + f("dificil");
+  const kp = per(k => P[k].kp_warn + "/" + P[k].kp_crit);
+  const cme = per(k => P[k].cme_speed_warn + " km/s");
+  const fresh = per(k => P[k].event_fresh_hours + " h");
+  const win = per(k => effectiveWindow(k) + " s");
+  const maxA = per(k => String(P[k].max_anomalies || 2));
+  const plan = per(k => P[k].days + (en ? " days × " : " días × ") + P[k].min_per_day + " min");
+  if (en) return `
       <div class="metrics-card">
-        <h3>Metricas del Sistema</h3>
-        <p><strong>SCORE</strong>: Puntuacion total de la mision. Aumenta al completar modulos y objetivos. Se penaliza si un modulo queda en estado critico.</p>
-        <p><strong>MASS</strong>: Masa actual de la estacion en kg. Afecta al delta-v necesario para maniobras.</p>
-        <p><strong>POWER</strong>: Potencia disponible en kW. Se degrada con tormentas solares (DONKI CME) y fallos en modulos de energia.</p>
-        <p><strong>BUDGET</strong>: Presupuesto restante en millones de dolares. Cada lanzamiento y reparacion consume presupuesto.</p>
-        <p><strong>DATA</strong>: Datos científicos recolectados en GB. Se generan en modulos de ciencia y observacion.</p>
+        <h3>System metrics (bottom bar)</h3>
+        <p><strong>SCORE</strong>: mission points from your design (see “Scoring”). Turns yellow when the design is not feasible.</p>
+        <p><strong>MASS</strong>: tonnes (t) = orbit mass + component mass. It must fit the launcher capacity.</p>
+        <p><strong>POWER</strong>: net kW = what the mission consumes − what the components generate. Negative = surplus; positive = deficit.</p>
+        <p><strong>BUDGET</strong>: credits (cr) = orbit + launcher + components. Going over <code>${CFG.budget_cap}</code> cr costs <code>${CFG.budget_penalty}</code> points.</p>
+        <p><strong>DATA</strong>: megabytes (mb) = orbit + mission + instruments.</p>
+        <p><strong>Fuel</strong>: kg on board versus what is needed (daily consumption × mission days).</p>
 
-        <h3>Algoritmos de Estado de Modulos</h3>
-        <p>Cada modulo tiene un estado: <code>ok</code> (normal), <code>warn</code> (anomalia), <code>crit</code> (critico).</p>
-        <p>El estado de una zona es el <em>peor</em> de todos sus modulos.</p>
-        <p>El estado global de la estacion es el <em>peor</em> de todas las zonas.</p>
+        <h3>Scoring (algorithm)</h3>
+        <p>It starts at <code>score_base</code> = ${CFG.score_base} and applies these rules (minimum result 0):</p>
+        <p>• Orbit fits the mission: <code>+${CFG.orbit_fit}</code>; does not fit: <code>${CFG.orbit_miss}</code>.<br>
+        • Launcher fits: <code>+${CFG.launcher_fit}</code>; does not fit: <code>${CFG.launcher_miss}</code>.<br>
+        • The mission's key instrument chosen in Components: <code>+20</code>.<br>
+        • A power system is chosen but power is short: <code>−20</code> (not feasible).<br>
+        • The mission needs propulsion and there is none, or the fuel is not enough: <code>−20</code> (not feasible).<br>
+        • The launcher cannot lift the total mass: <code>${CFG.mass_penalty}</code> (not feasible).<br>
+        • Total cost above ${CFG.budget_cap} cr: <code>${CFG.budget_penalty}</code>.</p>
+        <p>While playing: completing the mission adds <code>${CFG.complete_bonus}</code> (<code>${CFG.complete_bonus_hard}</code> on mission 7) and missions 4, 5, 6 and 9 generate <code>${CFG.data_bonus}</code> mb of DATA.</p>
 
-        <h3>Ecuaciones de Integracion NASA</h3>
-        <p><strong>Radiacion (SWPC K-index):</strong> si Kp >= 5, los modulos de radiacion pasan a <code>warn</code>; si Kp >= 7, a <code>crit</code>.</p>
-        <p><strong>Tormenta Solar (DONKI FLR):</strong> llamaradas clase M o X degradan comunicaciones y salud en EVA.</p>
-        <p><strong>CME (DONKI CME):</strong> eyecciones de masa coronal reducen la energia de paneles solares y degradan modulos de energia.</p>
-        <p><strong>Asteroides (NeoWs):</strong> asteroides potencialmente peligrosos generan alerta en navegacion y modulos de estructura.</p>
-
-        <h3>Escalado de Fallas</h3>
-        <p>Un modulo en <code>warn</code> parpadea en amarillo cada 1.2s. Si no se atiende (clic en el modulo) antes del tiempo de revision, escala a <code>crit</code> (parpadeo rojo cada 0.5s).</p>
-
-        <h3>Puntuacion por Mision</h3>
-        <p>Cada una de las 9 misiones tiene modulos clave y eventos NASA que la amenazan. Completar una misión sin fallos criticos otorga el puntaje maximo.</p>
-      </div>
-    `;
-
-const METRICS_HTML_EN = `
-      <div class="metrics-card">
-        <h3>System Metrics</h3>
-        <p><strong>SCORE</strong>: Total mission score. Increases by completing modules and objectives. Penalized if a module stays critical.</p>
-        <p><strong>MASS</strong>: Current station mass in kg. Affects the delta-v needed for maneuvers.</p>
-        <p><strong>POWER</strong>: Available power in kW. Degrades with solar storms (DONKI CME) and power module failures.</p>
-        <p><strong>BUDGET</strong>: Remaining budget in millions of dollars. Each launch and repair consumes budget.</p>
-        <p><strong>DATA</strong>: Scientific data collected in GB. Generated by science and observation modules.</p>
-
-        <h3>Module Status Algorithms</h3>
+        <h3>Module status algorithm</h3>
         <p>Each module has a status: <code>ok</code> (normal), <code>warn</code> (anomaly), <code>crit</code> (critical).</p>
         <p>The status of a zone is the <em>worst</em> of all its modules.</p>
         <p>The global station status is the <em>worst</em> of all zones.</p>
 
-        <h3>NASA Integration Equations</h3>
-        <p><strong>Radiation (SWPC K-index):</strong> if Kp >= 5, radiation modules go to <code>warn</code>; if Kp >= 7, to <code>crit</code>.</p>
-        <p><strong>Solar Storm (DONKI FLR):</strong> M or X class flares degrade communications and EVA health.</p>
-        <p><strong>CME (DONKI CME):</strong> coronal mass ejections reduce solar panel power and degrade power modules.</p>
-        <p><strong>Asteroids (NeoWs):</strong> potentially hazardous asteroids raise alerts in navigation and structure modules.</p>
+        <h3>Failure escalation</h3>
+        <p>A module in <code>warn</code> blinks yellow every 1.2 s. If you do not attend it (click the module) within <code>attend_window_sec</code> seconds it escalates to <code>crit</code> (red blink every 0.5 s). Now: ${win}.</p>
+        <p>Only <code>max_anomalies</code> anomalies can be active at once (${maxA}); the rest wait in a queue.</p>
 
-        <h3>Failure Escalation</h3>
-        <p>A module in <code>warn</code> blinks yellow every 1.2s. If not attended (click on the module) before the review time, it escalates to <code>crit</code> (red blink every 0.5s).</p>
+        <h3>NASA integration equations</h3>
+        <p>Thresholds depend on the difficulty and can be edited below.</p>
+        <p><strong>Radiation (SWPC, Kp index):</strong> Kp ≥ <code>kp_warn</code> → radiation modules go to <code>warn</code>; Kp ≥ <code>kp_crit</code> → <code>crit</code>. Values (warn/crit): ${kp}.</p>
+        <p><strong>Solar storm (DONKI FLR):</strong> flares of class <code>flr_min_class</code> or higher (M or X) degrade communications and EVA health.</p>
+        <p><strong>CME (DONKI CME):</strong> if speed ≥ <code>cme_speed_warn</code> (${cme}) they reduce solar panel power and degrade the power modules.</p>
+        <p><strong>Event age:</strong> only events from the last <code>event_fresh_hours</code> hours count (${fresh}).</p>
+        <p><strong>Asteroids (NeoWs):</strong> potentially hazardous ones raise alerts in navigation and structure (no threshold to configure here).</p>
 
-        <h3>Mission Scoring</h3>
-        <p>Each of the 9 missions has key modules and NASA events that threaten it. Completing a mission without critical failures grants the maximum score.</p>
+        <h3>Difficulty</h3>
+        <p>${plan}. Easy: spacecraft already designed (6/6 systems). Medium: 3/6 systems ready. Hard: you design the whole spacecraft (0/6). The harder the level, the more sensitive the thresholds and the less time to attend failures.</p>
       </div>
     `;
+  return `
+      <div class="metrics-card">
+        <h3>Métricas del sistema (barra inferior)</h3>
+        <p><strong>PUNTAJE</strong> (SCORE): puntos de la misión según tu diseño (ver «Puntuación»). Se pone amarillo si el diseño no es viable.</p>
+        <p><strong>MASA</strong> (MASS): toneladas (t) = masa de la órbita + masa de los componentes. Debe caber en la capacidad del lanzador.</p>
+        <p><strong>ENERGÍA</strong> (POWER): kW netos = lo que consume la misión − lo que generan los componentes. Negativo = sobra energía; positivo = déficit.</p>
+        <p><strong>PRESUPUESTO</strong> (BUDGET): créditos (cr) = órbita + lanzador + componentes. Pasar de <code>${CFG.budget_cap}</code> cr resta <code>${CFG.budget_penalty}</code> puntos.</p>
+        <p><strong>DATOS</strong> (DATA): megabytes (mb) = órbita + misión + instrumentos.</p>
+        <p><strong>Combustible</strong>: kg a bordo frente a lo necesario (consumo diario × días de misión).</p>
 
-function metricsHtml() { return LANG === "en" ? METRICS_HTML_EN : METRICS_HTML_ES; }
+        <h3>Puntuación (algoritmo)</h3>
+        <p>Se parte de <code>score_base</code> = ${CFG.score_base} y se aplican estas reglas (resultado mínimo 0):</p>
+        <p>• Órbita que encaja con la misión: <code>+${CFG.orbit_fit}</code>; si no encaja: <code>${CFG.orbit_miss}</code>.<br>
+        • Lanzador que encaja: <code>+${CFG.launcher_fit}</code>; si no: <code>${CFG.launcher_miss}</code>.<br>
+        • Instrumento clave de la misión elegido en Componentes: <code>+20</code>.<br>
+        • Hay sistema de potencia pero falta energía: <code>−20</code> (misión no viable).<br>
+        • La misión exige propulsión y no hay, o el combustible no alcanza: <code>−20</code> (no viable).<br>
+        • El lanzador no levanta la masa total: <code>${CFG.mass_penalty}</code> (no viable).<br>
+        • Costo total sobre ${CFG.budget_cap} cr: <code>${CFG.budget_penalty}</code>.</p>
+        <p>Al jugar: completar la misión suma <code>${CFG.complete_bonus}</code> (<code>${CFG.complete_bonus_hard}</code> en la misión 7) y las misiones 4, 5, 6 y 9 generan <code>${CFG.data_bonus}</code> mb de DATOS.</p>
+
+        <h3>Algoritmo de estado de módulos</h3>
+        <p>Cada módulo tiene un estado: <code>ok</code> (normal), <code>warn</code> (anomalía), <code>crit</code> (crítico).</p>
+        <p>El estado de una zona es el <em>peor</em> de todos sus módulos.</p>
+        <p>El estado global de la estación es el <em>peor</em> de todas las zonas.</p>
+
+        <h3>Escalado de fallas</h3>
+        <p>Un módulo en <code>warn</code> parpadea en amarillo cada 1.2 s. Si no lo atiendes (clic en el módulo) antes de <code>attend_window_sec</code> segundos pasa a <code>crit</code> (parpadeo rojo cada 0.5 s). Ahora: ${win}.</p>
+        <p>Solo puede haber <code>max_anomalies</code> anomalías activas a la vez (${maxA}); las demás esperan en cola.</p>
+
+        <h3>Ecuaciones de integración NASA</h3>
+        <p>Los umbrales dependen de la dificultad y se pueden editar abajo.</p>
+        <p><strong>Radiación (SWPC, índice Kp):</strong> Kp ≥ <code>kp_warn</code> → los módulos de radiación pasan a <code>warn</code>; Kp ≥ <code>kp_crit</code> → <code>crit</code>. Valores (warn/crit): ${kp}.</p>
+        <p><strong>Tormenta solar (DONKI FLR):</strong> llamaradas de clase <code>flr_min_class</code> o mayor (M o X) degradan comunicaciones y salud en EVA.</p>
+        <p><strong>CME (DONKI CME):</strong> si la velocidad ≥ <code>cme_speed_warn</code> (${cme}) reducen la energía de los paneles solares y degradan los módulos de energía.</p>
+        <p><strong>Antigüedad:</strong> solo cuentan los eventos de las últimas <code>event_fresh_hours</code> horas (${fresh}).</p>
+        <p><strong>Asteroides (NeoWs):</strong> los potencialmente peligrosos generan alerta en navegación y estructura (sin umbral configurable aquí).</p>
+
+        <h3>Dificultad</h3>
+        <p>${plan}. Fácil: nave ya diseñada (6/6 sistemas). Medio: 3/6 sistemas listos. Difícil: diseñas toda la nave (0/6). Cuanto más difícil, umbrales más sensibles y menos tiempo para atender los fallos.</p>
+      </div>
+    `;
+}
 
 /* ============ COMPONENTES: disenar la nave (v14) ============ */
 // Panel HTML (no toca la imagen): 6 sistemas, 1 opcion por sistema.
@@ -951,13 +1016,15 @@ const CONFIG_FIELDS = [
   { key:"cme_speed_warn", label:"CME rápida — velocidad mínima para alerta de energía", labelEn:"Fast CME — minimum speed for power alert", unit:"km/s" },
   { key:"event_fresh_hours", label:"Antigüedad máxima de un evento FLR/CME para aplicarlo", labelEn:"Maximum age of a FLR/CME event to apply", unit:"h" },
   { key:"attend_window_sec", label:"Segundos en warn (amarillo) sin atender antes de escalar a crit (rojo)", labelEn:"Seconds in warn (yellow) unattended before escalating to crit (red)", unit:"s" },
+  { key:"max_anomalies", label:"Anomalías a la vez (las demás quedan en cola y salen solas)", labelEn:"Anomalies at once (the rest queue up and come out on their own)", unit:"" },
   { key:"score_base", label:"Puntaje base de la misión", labelEn:"Mission base score", unit:"pts" },
   { key:"orbit_fit", label:"Órbita correcta", labelEn:"Correct orbit", unit:"pts" },
   { key:"orbit_miss", label:"Órbita incorrecta", labelEn:"Incorrect orbit", unit:"pts" },
   { key:"launcher_fit", label:"Lanzador correcto", labelEn:"Correct launcher", unit:"pts" },
   { key:"launcher_miss", label:"Lanzador incorrecto", labelEn:"Incorrect launcher", unit:"pts" },
   { key:"mass_penalty", label:"El lanzador no levanta la masa", labelEn:"Launcher cannot lift the mass", unit:"pts" },
-  { key:"budget_penalty", label:"Sobre el presupuesto (>400 cr)", labelEn:"Over budget (>400 cr)", unit:"pts" },
+  { key:"budget_cap", label:"Tope de presupuesto (sobre esto se penaliza)", labelEn:"Budget cap (penalty above this)", unit:"cr" },
+  { key:"budget_penalty", label:"Penalización por pasar el tope de presupuesto", labelEn:"Penalty for exceeding the budget cap", unit:"pts" },
   { key:"complete_bonus", label:"Bonus al completar la misión", labelEn:"Bonus for completing the mission", unit:"pts" },
   { key:"complete_bonus_hard", label:"Bonus al completar la misión 7 (la más difícil)", labelEn:"Bonus for completing mission 7 (hardest)", unit:"pts" },
   { key:"data_bonus", label:"DATA que generan las misiones 4, 5, 6 y 9", labelEn:"DATA generated by missions 4, 5, 6 and 9", unit:"mb" }
@@ -1000,13 +1067,14 @@ function renderMetrics() {
   // v14: los componentes elegidos y sus totales, dentro de Metricas.
   const ct = compTotals();
   const res = resourcesOf(currentConfig());
-  const compHtml = '<h3 class="ms-h">Componentes de la nave</h3>'
-    + '<p class="ms-sub">Lo que elegiste en el panel Componentes (botón 🧩 arriba a la derecha). Cada sistema suma a los recursos y al scoring: instrumento clave +20, sin potencia o sin combustible el diseño no es viable.</p>'
+  const en = LANG === "en";
+  const compHtml = '<h3 class="ms-h">' + (en ? "Spacecraft components" : "Componentes de la nave") + '</h3>'
+    + '<p class="ms-sub">' + (en ? "What you picked in the Components panel (🧩 button). Each system adds to the resources and the score: key instrument +20; without power or fuel the design is not feasible." : "Lo que elegiste en el panel Componentes (botón 🧩). Cada sistema suma a los recursos y al puntaje: instrumento clave +20; sin potencia o sin combustible el diseño no es viable.") + '</p>'
     + COMPONENT_SYSTEMS.map(sys => {
         const o = compOption(sys.key);
-        return "<p><strong>" + sys.name + ":</strong> " + (o ? o.id + " (MASS " + o.masa + " t · POWER " + o.potencia + " kW · BUDGET " + o.presupuesto + " cr · DATA " + o.datos + " mb" + (o.combustible ? " · FUEL " + o.combustible + " kg" : "") + ")" : "sin elegir") + "</p>";
+        return "<p><strong>" + sys.name + ":</strong> " + (o ? o.id + " (MASS " + o.masa + " t · POWER " + o.potencia + " kW · BUDGET " + o.presupuesto + " cr · DATA " + o.datos + " mb" + (o.combustible ? " · FUEL " + o.combustible + " kg" : "") + ")" : (en ? "not chosen" : "sin elegir")) + "</p>";
       }).join("")
-    + '<p><strong>Totales del diseño:</strong> MASS ' + res.masa.toFixed(1) + " t · POWER " + res.potencia.toFixed(1) + " kW · BUDGET " + res.presupuesto + " cr · DATA " + res.datos + " mb · FUEL " + ct.combustible + " kg (necesita " + ct.consumo * missionDays + " kg en " + missionDays + " días)</p>";
+    + '<p><strong>' + (en ? "Design totals:" : "Totales del diseño:") + '</strong> MASS ' + res.masa.toFixed(1) + " t · POWER " + res.potencia.toFixed(1) + " kW · BUDGET " + res.presupuesto + " cr · DATA " + res.datos + " mb · FUEL " + ct.combustible + " kg (" + (en ? "needs " : "necesita ") + ct.consumo * missionDays + (en ? " kg in " : " kg en ") + missionDays + (en ? " days)" : " días)") + "</p>";
   const msConfig = $("#ms-config");
   if (msConfig) {
     const div = document.createElement("div");
@@ -1076,6 +1144,9 @@ function route() {
   const isDifficulty = id === "difficulty";
   const isComponents = id === "components";
   $("#detail").hidden = !b && !isMetrics && !isDifficulty && !isComponents;
+  // El boton «Métricas y algoritmos» sobra cuando ya estas viendo las métricas.
+  const mBtn = document.getElementById("metricsBtn");
+  if (mBtn) mBtn.hidden = isMetrics;
   if (isMetrics) { renderMetrics(); return; }
   if (isDifficulty) { renderDifficulty(); return; }
   if (isComponents) { renderComponents(); return; }
@@ -1147,6 +1218,9 @@ function setHud(update) {
 }
 window.setHud = setHud;
 
+// Redondea a 1 decimal (evita 0.30000000000000004 al sumar componentes).
+const fmt1 = (n) => String(Math.round(Number(n) * 10) / 10);
+
 // El HUD refleja la configuracion de mision elegida (o 0 si aun no hay).
 function syncHud() {
   const cfg = currentConfig();
@@ -1154,8 +1228,8 @@ function syncHud() {
   const res = resourcesOf(cfg);
   setHud({
     score: result.score,
-    mass: res.masa + " t",
-    power: res.potencia + " kW",
+    mass: fmt1(res.masa) + " t",
+    power: fmt1(res.potencia) + " kW",
     budget: res.presupuesto + " cr",
     data: res.datos + " mb"
   });

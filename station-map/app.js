@@ -1,20 +1,20 @@
 /* ============ CONFIGURACIÓN (edita aquí) ============ */
 const CONFIG = {
   image: "station.png",          // pon tu imagen en esta misma carpeta
-  storageKey: "station-zones-v2", // para recordar coordenadas editadas
+  storageKey: "station-zones-v3", // para recordar coordenadas editadas
   showLabels: false,              // la imagen ya trae letras y nombres; ponlo en true si usas otro fondo
-  mapButton: { x:39.4, y:84.0, w:21.2, h:14.1 } // zona clicable sobre el botón MAP de la imagen (%)
+  mapButton: { x:39.38, y:84.05, w:21.25, h:14.07 } // zona clicable sobre el botón MAP de la imagen (%)
 };
 
 // x, y, w, h en % de la imagen (0–100).
 // url: si pones una página (p. ej. "zona-a.html") el botón MAP navega ahí; si es null usa la vista interna.
 const ZONES = [
-  { id:"A", name:"Habitat & Services",       mods:["Habitabilidad","Salud","ECLSS","Incendios","Radiación"],                       x:8.1,  y:31.4, w:12.6, h:36.1, status:"ok", url:"../zone-a/index.html" },
-  { id:"B", name:"Laboratory & Crops",       mods:["Alimentos","Térmico","Energía","Incendios"],                                       x:22.4, y:31.4, w:12.6, h:36.1, status:"ok", url:"../zone-b/index.html" },
-  { id:"C", name:"Technical Compartment",    mods:["ECLSS","Energía","Térmico","Comando"],                                         x:36.6, y:31.4, w:12.6, h:36.1, status:"ok", url:"../zone-c/index.html" },
-  { id:"D", name:"Control & Observation",    mods:["Comando","Navegación","Comms","Robótica"],                                     x:50.8, y:31.4, w:12.6, h:36.1, status:"ok", url:"../zone-d/index.html" },
-  { id:"E", name:"Access Node & Airlock",    mods:["Estructura","Robótica/EVA","Incendios"],                                       x:65.0, y:31.4, w:12.5, h:36.1, status:"ok", url:"../zone-e/index.html" },
-  { id:"F", name:"Exterior Assembly",        mods:["Energía","Térmico","Comms","Ciencia","Estructura","Propulsión","Radiación"],   x:79.2, y:31.4, w:12.5, h:36.1, status:"ok", url:"../zone-f/index.html" }
+  { id:"A", name:"Habitat & Services",       mods:["Habitabilidad","Salud","ECLSS","Incendios","Radiación"],                       x:8.00, y:31.33, w:12.75, h:36.40, status:"ok", url:"../zone-a/index.html" },
+  { id:"B", name:"Laboratory & Crops",       mods:["Alimentos","Térmico","Energía","Incendios"],                                       x:22.31, y:31.33, w:12.75, h:36.40, status:"ok", url:"../zone-b/index.html" },
+  { id:"C", name:"Technical Compartment",    mods:["ECLSS","Energía","Térmico","Comando"],                                         x:36.56, y:31.33, w:12.75, h:36.40, status:"ok", url:"../zone-c/index.html" },
+  { id:"D", name:"Control & Observation",    mods:["Comando","Navegación","Comms","Robótica"],                                     x:50.75, y:31.33, w:12.75, h:36.40, status:"ok", url:"../zone-d/index.html" },
+  { id:"E", name:"Access Node & Airlock",    mods:["Estructura","Robótica/EVA","Incendios"],                                       x:64.94, y:31.33, w:12.75, h:36.40, status:"ok", url:"../zone-e/index.html" },
+  { id:"F", name:"Exterior Assembly",        mods:["Energía","Térmico","Comms","Ciencia","Estructura","Propulsión","Radiación"],   x:79.19, y:31.33, w:12.75, h:36.40, status:"ok", url:"../zone-f/index.html" }
 ];
 
 /* ============ ALERTAS: parametro URL y estado guardado ============ */
@@ -226,33 +226,27 @@ render(); route();
 // Mapeamos las coordenadas de zona (0-100% sobre la imagen) al stage real.
 function ajustarZonasImagen() {
   const img = $("#bg");
-  const stage = $("#stage");
-  if (!img.complete || img.naturalWidth === 0) return;
-  const sr = stage.getBoundingClientRect();
-  const ir = img.getBoundingClientRect();
-  // Posicion y tamano de la imagen mostrada dentro del stage (en % del stage)
-  const imgLeftPct = ((ir.left - sr.left) / sr.width) * 100;
-  const imgTopPct = ((ir.top - sr.top) / sr.height) * 100;
-  const imgWpct = (ir.width / sr.width) * 100;
-  const imgHpct = (ir.height / sr.height) * 100;
+  const stageEl = $("#stage");
+  if (!img.naturalWidth) return;
+  const sw = stageEl.clientWidth, sh = stageEl.clientHeight;
+  if (!sw || !sh) return;
+  // getBoundingClientRect() del <img> devuelve la CAJA del elemento, no la
+  // imagen dibujada con object-fit:contain. Por eso las zonas se corrian.
+  // Aqui calculamos el rectangulo real que ocupa la imagen dentro del stage.
+  const scale = Math.min(sw / img.naturalWidth, sh / img.naturalHeight);
+  const iw = img.naturalWidth * scale, ih = img.naturalHeight * scale;
+  const il = (sw - iw) / 2, it = (sh - ih) / 2;
+  const place = (el, r) => Object.assign(el.style, {
+    left:   (il + r.x / 100 * iw) + "px",
+    top:    (it + r.y / 100 * ih) + "px",
+    width:  (r.w / 100 * iw) + "px",
+    height: (r.h / 100 * ih) + "px"
+  });
   ZONES.forEach(z => {
     const el = zonesEl.querySelector(`[data-id="${z.id}"]`);
-    if (!el) return;
-    const x = imgLeftPct + (z.x / 100) * imgWpct;
-    const y = imgTopPct + (z.y / 100) * imgHpct;
-    const w = (z.w / 100) * imgWpct;
-    const h = (z.h / 100) * imgHpct;
-    Object.assign(el.style, { left:x+"%", top:y+"%", width:w+"%", height:h+"%" });
+    if (el) place(el, z);
   });
-  // El botón MAP también se remapea: antes quedaba con las coordenadas
-  // crudas de la imagen y se desalineaba cuando había letterboxing.
-  const mb = CONFIG.mapButton, hot = $("#mapHot");
-  Object.assign(hot.style, {
-    left: (imgLeftPct + (mb.x / 100) * imgWpct) + "%",
-    top: (imgTopPct + (mb.y / 100) * imgHpct) + "%",
-    width: ((mb.w / 100) * imgWpct) + "%",
-    height: ((mb.h / 100) * imgHpct) + "%"
-  });
+  place($("#mapHot"), CONFIG.mapButton);
 }
 // Ejecutar despues de render y cuando la imagen cargue
 bg.addEventListener("load", () => { ajustarZonasImagen(); });
@@ -260,6 +254,8 @@ bg.addEventListener("load", () => { ajustarZonasImagen(); });
 // de registrar el listener: ajustar de inmediato en ese caso.
 if (bg.complete && bg.naturalWidth) ajustarZonasImagen();
 window.addEventListener("resize", ajustarZonasImagen);
+window.addEventListener("orientationchange", () => setTimeout(ajustarZonasImagen, 150));
+if (window.ResizeObserver) new ResizeObserver(ajustarZonasImagen).observe(stage);
 
 /* ============ RELOJ DE MISIÓN (día X/5 en la cabecera) ============ */
 // La misión arranca con START MISSION en el menú (POST /api/mission/start).

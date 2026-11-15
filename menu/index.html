@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>XONIDU Station — Space Mission Design Game</title>
-  <link rel="stylesheet" href="style.css?v=14">
+  <link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
   <main id="stage" class="stage">
@@ -28,8 +28,13 @@
     <!-- Barra inferior: SCORE · MASS · POWER · BUDGET · DATA -->
     <div id="hud" class="hud" aria-label="Mission status"></div>
 
+    <!-- Botones grandes para el movil en vertical (los mismos 4 del menu).
+         Se llenan en app.js; solo se ven en portrait <=820px. -->
+    <nav id="mobileMenu" class="mobile-menu" aria-label="Main menu"></nav>
+
     <div id="toast" class="toast" role="status"></div>
   </main>
+
 
   <!-- Vista interna para los botones que aún no tienen página propia -->
   <section id="detail" class="detail" hidden>
@@ -40,6 +45,6 @@
     </div>
   </section>
 
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>

@@ -87,6 +87,7 @@ STATE = {
     # "warn_since" = cuando paso cada modulo a warn (ISO). El frontend
     # los usa para mostrar el escudo 🛡 y la cuenta atras de escalado.
     "reinforced": [],
+    "pending_anomalies": 0,
     "warn_since": {},
     "zonas": {z: "ok" for z in "ABCDEF"},
     "modulos": {
@@ -118,7 +119,8 @@ DEFAULT_GAME_CONFIG = {
     "kp_crit": 7,            # Kp >= 7 -> radiacion crit
     "cme_speed_warn": 350,   # km/s: CME mas rapida -> energia warn
     "event_fresh_hours": 96, # antiguedad maxima de un evento FLR/CME para aplicarlo
-    "attend_window_sec": 40,  # v19.1: SEGUNDOS en warn sin atender antes de escalar a crit (Darian lo puso en 40 s; se cambia en el panel Metrics o en DIFFICULTY_PRESETS)
+    "attend_window_sec": 80,  # v19.4: SEGUNDOS en warn sin atender antes de escalar a crit (Darian pidio bajar la dificultad a la mitad: facil 120, medio 80, dificil 60)
+    "max_anomalies": 2,       # v19.3: maximo de anomalias (warn/crit) a la vez; las demas quedan en cola y salen solas
     # Scoring de mision (lo calcula el menu)
     "score_base": 100,
     "orbit_fit": 20, "orbit_miss": -15,
@@ -140,15 +142,15 @@ CONFIG_PATH = Path(__file__).resolve().parent / "game_config.json"
 # de la NASA (Kp mas bajo, CME mas lenta, llamaradas clase C tambien alertan)
 # y menos tiempo para atenderlas antes de que escalen a crit.
 DIFFICULTY_PRESETS = {
-    "facil":   {"mission_days": 5, "min_per_day": 1, "kp_warn": 5, "kp_crit": 7,
-                "cme_speed_warn": 350, "flr_min_class": "M", "attend_window_sec": 60,
-                "event_fresh_hours": 24},
-    "medio":   {"mission_days": 5, "min_per_day": 2, "kp_warn": 5, "kp_crit": 7,
-                "cme_speed_warn": 350, "flr_min_class": "M", "attend_window_sec": 40,
-                "event_fresh_hours": 96},
-    "dificil": {"mission_days": 5, "min_per_day": 3, "kp_warn": 4, "kp_crit": 6,
-                "cme_speed_warn": 300, "flr_min_class": "C", "attend_window_sec": 30,
-                "event_fresh_hours": 120},
+    "facil":   {"mission_days": 5, "min_per_day": 1, "kp_warn": 6, "kp_crit": 8,
+                "cme_speed_warn": 500, "flr_min_class": "M", "attend_window_sec": 120,
+                "event_fresh_hours": 24, "max_anomalies": 2},
+    "medio":   {"mission_days": 5, "min_per_day": 2, "kp_warn": 6, "kp_crit": 8,
+                "cme_speed_warn": 500, "flr_min_class": "M", "attend_window_sec": 80,
+                "event_fresh_hours": 96, "max_anomalies": 2},
+    "dificil": {"mission_days": 5, "min_per_day": 3, "kp_warn": 5, "kp_crit": 7,
+                "cme_speed_warn": 450, "flr_min_class": "M", "attend_window_sec": 60,
+                "event_fresh_hours": 120, "max_anomalies": 2},
 }
 
 
@@ -223,7 +225,7 @@ def mission_score():
     # Drenaje (v19): mientras un modulo esta en crit sin atender, el
     # score baja 5 pts por modulo y por minuto (cada poll). Es la
     # consecuencia de dejar una falla critica sin atender.
-    drain = -5 * int(MISSION_STATS.get("drain", 0))
+    drain = -2 * int(MISSION_STATS.get("drain", 0))
     # Combustible (v14): si la mision necesitaba combustible y se agoto
     # antes de terminar, -20. Solo cuenta cuando la mision termino.
     fuel = 0
@@ -338,6 +340,71 @@ WARN_SINCE = {}
 RANK = {"ok": 0, "warn": 1, "crit": 2}
 
 
+# v19.3: TOPE de anomalias simultaneas (facil 2, medio 2, dificil 3).
+# Cuando la NASA trae mas fallos de los que caben a la vez, los demas
+# quedan en cola (PENDING_ANOMALIES) y salen SOLOS durante la mision en
+# cuanto se libera un hueco (al reparar un modulo o al recuperarse).
+PENDING_ANOMALIES = []  # [{zona, slug, nivel, reason}]
+
+# v19.4: marca de tiempo de la ultima reparacion (un modulo paso a ok).
+# Mientras no hayan pasado 30 s desde la reparacion,
+# _drain_pending_anomalies no suelta la siguiente anomalia de la cola, para
+# no disparar dos anomalias seguidas justo al reparar.
+LAST_REPAIR_TS = None
+
+
+def _count_anomalies():
+    return sum(1 for mods in STATE["modulos"].values()
+               for v in mods.values() if v in ("warn", "crit"))
+
+
+def _max_anomalies():
+    try:
+        return max(1, int(GAME_CONFIG.get("max_anomalies", 2)))
+    except Exception:
+        return 2
+
+
+def _sync_pending_state():
+    STATE["pending_anomalies"] = len(PENDING_ANOMALIES)
+
+
+def _apply_nasa_anomaly(zona, slug, nivel, reason=""):
+    """Aplica una anomalia de la NASA respetando el tope. Si no hay hueco,
+    la deja en cola para que salga sola cuando se libere uno. Devuelve
+    True si se aplico, False si quedo en cola."""
+    cur = STATE["modulos"].get(zona, {}).get(slug)
+    if cur in ("warn", "crit"):
+        return True  # ya es una anomalia activa, no suma al tope
+    if cur not in ("ok", "pre"):
+        return False
+    if _count_anomalies() >= _max_anomalies():
+        if not any(x["zona"] == zona and x["slug"] == slug for x in PENDING_ANOMALIES):
+            PENDING_ANOMALIES.append({"zona": zona, "slug": slug,
+                                      "nivel": nivel, "reason": reason})
+            _sync_pending_state()
+            print(f"[NASA] Anomalia en cola ({reason}): {zona}.{slug} -> {nivel} "
+                  f"(tope {_max_anomalies()} activas)")
+        return False
+    return _set_module_state(zona, slug, nivel)
+
+
+def _drain_pending_anomalies():
+    """Saca anomalias de la cola mientras haya hueco (al reparar un modulo
+    y en cada poll de la NASA). Freno: tras reparar un modulo, espera 30 s
+    antes de soltar la siguiente anomalia en cola."""
+    global LAST_REPAIR_TS
+    if LAST_REPAIR_TS is not None and (_utcnow() - LAST_REPAIR_TS).total_seconds() < 30:
+        return
+    while PENDING_ANOMALIES and _count_anomalies() < _max_anomalies():
+        nxt = PENDING_ANOMALIES.pop(0)
+        _sync_pending_state()
+        if STATE["modulos"].get(nxt["zona"], {}).get(nxt["slug"]) in ("ok", "pre"):
+            _set_module_state(nxt["zona"], nxt["slug"], nxt["nivel"])
+            print(f"[NASA] Anomalia en cola sale ahora: {nxt['zona']}.{nxt['slug']} "
+                  f"-> {nxt['nivel']} ({nxt.get('reason', '')})")
+
+
 def _set_module_state(zona, slug, nivel):
     """Aplica un nivel a un modulo y mantiene WARN_SINCE. Devuelve True si cambio."""
     mods = STATE["modulos"].get(zona, {})
@@ -363,6 +430,10 @@ def _set_module_state(zona, slug, nivel):
         # Al reparar, el refuerzo se gasta (hay que volver a reforzar).
         REINFORCED.discard(key)
         STATE["reinforced"] = sorted(REINFORCED)
+        # Anotamos la reparacion para el freno de 30 s del drenaje.
+        LAST_REPAIR_TS = _utcnow()
+        # v19.3: se libero un hueco -> que salga la siguiente anomalia en cola.
+        _drain_pending_anomalies()
     return True
 
 
@@ -858,7 +929,7 @@ def procesar_eventos_nasa():
             for zona, slug in mods:
                 ATTENDED.discard(f"{zona}.{slug}")
                 if STATE["modulos"].get(zona, {}).get(slug) in ("ok", "pre"):
-                    _set_module_state(zona, slug, "warn")
+                    _apply_nasa_anomaly(zona, slug, "warn", "alerta SWPC")
             print(f"[NASA] Alerta SWPC ({al.get('product_id', '')}, {issue}) -> comms/radiacion warn")
 
     # --- Eventos discretos (FLR/CME): solo los recientes, aplicados una vez ---
@@ -898,7 +969,7 @@ def procesar_eventos_nasa():
                 # Evento nuevo: la atencion de un evento anterior ya no cuenta.
                 ATTENDED.discard(f"{zona}.{slug}")
                 if STATE["modulos"].get(zona, {}).get(slug) in ("ok", "pre"):
-                    _set_module_state(zona, slug, "warn")
+                    _apply_nasa_anomaly(zona, slug, "warn", "llamarada solar")
             print(f"[NASA] Llamarada {clase} ({peak}) -> radiacion/comms warn")
             supabase_guardar_evento_nasa("flr", "llamarada_solar",
                 "critica" if clase.startswith("X") else "alta",
@@ -936,7 +1007,7 @@ def procesar_eventos_nasa():
                 # Evento nuevo: la atencion de un evento anterior ya no cuenta.
                 ATTENDED.discard(f"{zona}.{slug}")
                 if STATE["modulos"].get(zona, {}).get(slug) in ("ok", "pre"):
-                    _set_module_state(zona, slug, "warn")
+                    _apply_nasa_anomaly(zona, slug, "warn", "CME")
             print(f"[NASA] CME {speed} km/s ({start}) -> energia warn")
             supabase_guardar_evento_nasa("cme", "eyeccion_masa_coronal",
                 "alta", start, ev, ["mod-c-energy", "mod-f-energy"])
@@ -992,7 +1063,7 @@ def procesar_eventos_nasa():
                 for zona, slug in mods:
                     ATTENDED.discard(f"{zona}.{slug}")
                     if STATE["modulos"].get(zona, {}).get(slug) == "ok":
-                        _set_module_state(zona, slug, "warn")
+                        _apply_nasa_anomaly(zona, slug, "warn", "asteroide peligroso")
                 print(f"[NASA] Asteroide peligroso {hazardous[0][1]} ({day}) -> navegacion/estructura warn")
 
     # --- Senales tempranas (v15): la falla se puede PREVER ---
@@ -1023,7 +1094,7 @@ def procesar_eventos_nasa():
                     for zona, slug in mods:
                         ATTENDED.discard(f"{zona}.{slug}")
                         if STATE["modulos"].get(zona, {}).get(slug) in ("ok", "pre"):
-                            _set_module_state(zona, slug, "warn")
+                            _apply_nasa_anomaly(zona, slug, "warn", "DSN")
                     print(f"[NASA] DSN: estacion caida {down_st} (activas: {active}) -> comms warn")
     except Exception as e:
         print(f"[NASA] Error DSN: {e}")
@@ -1044,7 +1115,7 @@ def procesar_eventos_nasa():
                         for zona, slug in mods:
                             ATTENDED.discard(f"{zona}.{slug}")
                             if STATE["modulos"].get(zona, {}).get(slug) in ("ok", "pre"):
-                                _set_module_state(zona, slug, "warn")
+                                _apply_nasa_anomaly(zona, slug, "warn", "viento solar")
                         print(f"[NASA] Viento solar {ws} km/s -> comms warn")
     except Exception as e:
         print(f"[NASA] Error viento solar: {e}")
@@ -1065,13 +1136,16 @@ def procesar_eventos_nasa():
                         for zona, slug in mods:
                             ATTENDED.discard(f"{zona}.{slug}")
                             if STATE["modulos"].get(zona, {}).get(slug) in ("ok", "pre"):
-                                _set_module_state(zona, slug, "warn")
+                                _apply_nasa_anomaly(zona, slug, "warn", "campo magnetico")
                         print(f"[NASA] Campo magnetico Bt {bt} nT -> radiacion warn")
     except Exception as e:
         print(f"[NASA] Error campo magnetico: {e}")
 
     # --- Escalado por no atender ---
     _escalate_unattended()
+    # v19.3: si se libero un hueco (evento caducado/modulo recuperado),
+    # que salga la siguiente anomalia en cola.
+    _drain_pending_anomalies()
     # v19: drenaje — cada modulo en crit sin atender resta 5 pts por minuto
     # (cada poll). Es la consecuencia de dejar una falla critica.
     try:
@@ -1131,6 +1205,11 @@ def escalation_loop():
     while ESCALATION_ACTIVE:
         try:
             _escalate_unattended()
+            # v19.4: drena la cola cada 5 s para que la siguiente anomalia
+            # salga a los ~30 s de la reparacion (el freno de 30 s vive en
+            # _drain_pending_anomalies) y no hasta el proximo poll de la
+            # NASA (60 s).
+            _drain_pending_anomalies()
         except Exception as e:
             print(f"[Escalation] Error: {e}")
         time.sleep(5)
@@ -1405,6 +1484,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             global KP_EPISODE
             ATTENDED.clear()
             EVENT_STATE.clear()
+            PENDING_ANOMALIES.clear()
+            _sync_pending_state()
             WARN_SINCE.clear()
             REINFORCED.clear()
             STATE["reinforced"] = []

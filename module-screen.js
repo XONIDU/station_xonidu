@@ -224,6 +224,10 @@
   // v19: estado de las mecanicas nuevas (se limpia al volver a ok).
   var keypadInput = {};  // modulo -> digitos tecleados ("")
   var keypadBad = {};    // modulo -> ultimo codigo mal introducido
+  var keypadCode = {};   // v19.3: modulo -> codigo aleatorio de 4 digitos del intento actual
+  var dialTarget = {};   // v19.3: modulo -> objetivo aleatorio del potenciometro 1
+  var dialTarget2 = {};  // v19.3: modulo -> objetivo aleatorio del potenciometro 2
+  var dialVal2 = {};     // v19.3: modulo -> valor actual del potenciometro 2
   var armVal = {};       // modulo -> [angulo hombro, angulo codo]
   var dialVal = {};      // modulo -> valor actual del potenciometro
   var wireSel = {};      // modulo -> fuente seleccionada (o null)
@@ -289,11 +293,11 @@
     "science": "quiz", "propulsion": "dial", "fire": "keypad",
     "health": "quiz", "habitability": "dial", "food": "quiz"
   };
-  // Codigo del teclado: de donde sale (valores reales de la NASA).
+  // Codigo del teclado: aleatorio de 4 digitos por intento (v19.3).
   var KEYPAD = {
-    "energy":  { label: "Código de autorización del bus de energía", source: "cme_speed", hint: "la velocidad del CME" },
-    "command": { label: "Código de mando de la estación", source: "kp", hint: "el índice Kp × 100" },
-    "fire":    { label: "Código de supresión de incendios", source: "solar_wind", hint: "la velocidad del viento solar" }
+    "energy":  { label: "Código de autorización del bus de energía" },
+    "command": { label: "Código de mando de la estación" },
+    "fire":    { label: "Código de supresión de incendios" }
   };
   // Brazo robotico: articulaciones y objetivo (grados).
   var ARM = {
@@ -302,13 +306,38 @@
       { name: "Codo", min: 0, max: 180, target: 90 }
     ]}
   };
-  // Potenciometro: parametro, rango y valor objetivo.
+  // Potenciometro: parametro, rango y RANGO del objetivo (v19.3: el
+  // objetivo es ALEATORIO en cada intento, entre tmin y tmax, para que el
+  // potenciometro no pida siempre el mismo angulo/valor).
   var DIAL = {
-    "eclss":        { param: "Flujo de O2", unit: "L/min", min: 0, max: 10, target: 7 },
-    "navigation":   { param: "Calibración del giroscopio", unit: "°", min: 0, max: 360, target: 180 },
-    "propulsion":   { param: "Válvula de combustible", unit: "%", min: 0, max: 100, target: 60 },
-    "habitability": { param: "Presión de cabina", unit: "kPa", min: 0, max: 120, target: 101 }
+    "eclss":        { param: "Flujo de O2", unit: "L/min", min: 0, max: 10, tmin: 5, tmax: 9 },
+    "navigation":   { param: "Calibración del giroscopio", unit: "°", min: 0, max: 360, tmin: 30, tmax: 330 },
+    "propulsion":   { param: "Válvula de combustible", unit: "%", min: 0, max: 100, tmin: 40, tmax: 80 },
+    "habitability": { param: "Presión de cabina", unit: "kPa", min: 0, max: 120, tmin: 95, tmax: 108 }
   };
+  // v19.3: SEGUNDO potenciometro (medio/dificil) — mas diversion, dos
+  // mandos que ajustar en el mismo paso.
+  var DIAL2 = {
+    "eclss":        { param: "Depurador de CO2", unit: "%", min: 0, max: 100, tmin: 40, tmax: 70 },
+    "navigation":   { param: "Altímetro orbital", unit: "km", min: 300, max: 500, tmin: 380, tmax: 450 },
+    "propulsion":   { param: "Empuje del motor", unit: "%", min: 0, max: 100, tmin: 50, tmax: 90 },
+    "habitability": { param: "Temperatura de cabina", unit: "°C", min: 10, max: 30, tmin: 18, tmax: 24 }
+  };
+  // Objetivos aleatorios por intento (se fijan al abrir el paso).
+  function dialTargetFor(slug, id) {
+    if (id && dialTarget[id] !== undefined) return dialTarget[id];
+    var dl = DIAL[slug] || DIAL.eclss;
+    var v = dl.tmin + Math.floor(Math.random() * (dl.tmax - dl.tmin + 1));
+    if (id) dialTarget[id] = v;
+    return v;
+  }
+  function dialTarget2For(slug, id) {
+    if (id && dialTarget2[id] !== undefined) return dialTarget2[id];
+    var dl = DIAL2[slug] || DIAL2.eclss;
+    var v = dl.tmin + Math.floor(Math.random() * (dl.tmax - dl.tmin + 1));
+    if (id) dialTarget2[id] = v;
+    return v;
+  }
   // Conexiones: pares fuente -> destino (se barajan al mostrar).
   var WIRES = {
     "comms":       [["Antena A", "Transceptor 1"], ["Antena B", "Transceptor 2"], ["Antena C", "Transceptor 3"], ["Antena D", "Transceptor 4"]],
@@ -341,20 +370,19 @@
   // secuencia; el slider tiene la zona verde MAS ANCHA. Medio (amigable):
   // 3 pasos, diagnostico SIN penalizacion, sin secuencia. Dificil
   // (tecnico): todo — diagnostico con -10, slider, hold y secuencia en crit.
-  // v19: el codigo del teclado sale de los valores REALES de la NASA.
+  // v19.3: el codigo del teclado es ALEATORIO de 4 digitos en cada
+  // intento de reparacion. Antes salia de un valor en vivo (CME/Kp/
+  // viento solar) y casi siempre era el mismo (0303), asi que el jugador
+  // lo memorizaba. Ahora se genera al abrir la reparacion y se guarda en
+  // keypadCode[id] hasta que el modulo vuelve a ok.
   // Facil/medio: el codigo se muestra en el monitor (solo hay que
-  // teclearlo). Dificil: hay que deducirlo de los valores en vivo.
-  function keypadCodeFor(slug) {
-    var kp = KEYPAD[slug] || KEYPAD.energy;
-    var d = (typeof liveCache !== "undefined" && liveCache) || null;
-    var n = 0;
-    if (d) {
-      if (kp.source === "cme_speed" && d.cme_speed != null) n = Math.round(d.cme_speed);
-      else if (kp.source === "kp" && d.kp != null) n = Math.round(d.kp * 100);
-      else if (kp.source === "solar_wind" && d.solar_wind != null) n = Math.round(d.solar_wind);
-    }
-    if (!n) n = 1234; // sin datos en vivo, codigo de practica
-    return String(10000 + (n % 10000)).slice(1);
+  // teclearlo). Dificil: hay que buscarlo en "Valores en vivo" (abajo),
+  // donde aparece como "Codigo de autorizacion" en la telemetria.
+  function keypadCodeFor(slug, id) {
+    if (id && keypadCode[id]) return keypadCode[id];
+    var code = String(1000 + Math.floor(Math.random() * 9000));
+    if (id) keypadCode[id] = code;
+    return code;
   }
   function stepsFor(id) {
     var base = REPAIR_STEPS[slugOf(id)] || REPAIR_GENERIC;
@@ -489,7 +517,7 @@
             var cur = keypadInput[kmod] || "";
             if (key === "C") { keypadInput[kmod] = ""; delete keypadBad[kmod]; }
             else if (key === "↵") {
-              var code = keypadCodeFor(slugOf(kmod));
+              var code = keypadCodeFor(slugOf(kmod), kmod);
               if (cur === code) {
                 delete keypadInput[kmod]; delete keypadBad[kmod];
                 kp.done += 1; kp.busy = -1;
@@ -509,10 +537,12 @@
           var db = e.target && e.target.closest ? e.target.closest(".keypad-btn[data-dial]") : null;
           if (db && !db.disabled) {
             var dmod = db.getAttribute("data-mod");
-            var dl = DIAL[slugOf(dmod)] || DIAL.eclss;
-            var dv = (dialVal[dmod] !== undefined) ? dialVal[dmod] : Math.round((dl.min + dl.max) / 2);
+            var dnum = db.getAttribute("data-dial-n") || "1";
+            var dl = (dnum === "2") ? (DIAL2[slugOf(dmod)] || DIAL2.eclss) : (DIAL[slugOf(dmod)] || DIAL.eclss);
+            var dstore = (dnum === "2") ? dialVal2 : dialVal;
+            var dv = (dstore[dmod] !== undefined) ? dstore[dmod] : Math.round((dl.min + dl.max) / 2);
             dv = Math.max(dl.min, Math.min(dl.max, dv + parseInt(db.getAttribute("data-dial"), 10)));
-            dialVal[dmod] = dv;
+            dstore[dmod] = dv;
             repairSection(repairIds);
             return;
           }
@@ -527,7 +557,14 @@
             var adiff = getDifficulty();
             var atol = adiff === "facil" ? 2 : (adiff === "medio" ? 1 : 0);
             var av = (dialVal[amod] !== undefined) ? dialVal[amod] : Math.round((adl.min + adl.max) / 2);
-            if (Math.abs(av - adl.target) > atol) { repairSection(repairIds); return; }
+            if (Math.abs(av - dialTargetFor(slugOf(amod), amod)) > atol) { repairSection(repairIds); return; }
+            // v19.3: medio/dificil tienen SEGUNDO potenciometro: tambien
+            // hay que dejarlo en su objetivo.
+            if (adiff !== "facil") {
+              var adl2 = DIAL2[slugOf(amod)] || DIAL2.eclss;
+              var av2 = (dialVal2[amod] !== undefined) ? dialVal2[amod] : Math.round((adl2.min + adl2.max) / 2);
+              if (Math.abs(av2 - dialTarget2For(slugOf(amod), amod)) > atol) { repairSection(repairIds); return; }
+            }
             ap.done += 1; ap.busy = -1;
             var as = stepsFor(amod);
             if (ap.done >= as.length) {
@@ -770,7 +807,7 @@
       var st = getStatus(id);
       var info = (window.XONIDU_MODULE_INFO || {})[id];
       var name = info ? info.name : id;
-      if (st === "ok") { delete repairProgress[id]; delete diagDone[id]; delete diagWrong[id]; delete diagWrongPick[id]; delete diagCorrect[id]; delete reinforceProgress[id]; delete reinforced[id]; delete seqOrder[id]; delete seqProgress[id]; delete seqWrong[id]; delete calVal[id]; delete calBad[id]; delete holdState[id]; delete keypadInput[id]; delete keypadBad[id]; delete armVal[id]; delete dialVal[id]; delete wireSel[id]; delete wireDone[id]; delete wireBad[id]; delete wireOrder[id]; delete quizWrong[id]; return; }
+      if (st === "ok") { delete repairProgress[id]; delete diagDone[id]; delete diagWrong[id]; delete diagWrongPick[id]; delete diagCorrect[id]; delete reinforceProgress[id]; delete reinforced[id]; delete seqOrder[id]; delete seqProgress[id]; delete seqWrong[id]; delete calVal[id]; delete calBad[id]; delete holdState[id]; delete keypadInput[id]; delete keypadBad[id]; delete keypadCode[id]; delete armVal[id]; delete dialVal[id]; delete dialVal2[id]; delete dialTarget[id]; delete dialTarget2[id]; delete wireSel[id]; delete wireDone[id]; delete wireBad[id]; delete wireOrder[id]; delete quizWrong[id]; return; }
       // v15: senal temprana (PRE) — la falla se ve venir, aun no ocurrio.
       if (st === "pre") {
         var isShielded = reinforced[id] || (window.stationStore && stationStore.isReinforced && stationStore.isReinforced(id));
@@ -872,7 +909,7 @@
             if (s.kind === "keypad") {
               if (done) return '<li><button type="button" class="repair-step done" data-mod="' + esc(id) + '" data-step="' + i + '" disabled>' + (i + 1) + '. 🔢 Código introducido <span class="st">✓ Hecho</span></button></li>';
               var kp = KEYPAD[slugOf(id)] || KEYPAD.energy;
-              var code = keypadCodeFor(slugOf(id));
+              var code = keypadCodeFor(slugOf(id), id);
               var inp = keypadInput[id] || "";
               var showCode = getDifficulty() !== "dificil";
               var disp = (inp + "____").slice(0, 4);
@@ -880,7 +917,7 @@
               return '<li><div class="cal-box"><b>🔢 Paso ' + (i + 1) + " — " + esc(kp.label) + '</b>'
                 + (showCode
                     ? '<p class="mech-code">Código en el monitor: <b>' + code + '</b></p>'
-                    : '<p>El código es <b>' + esc(kp.hint) + '</b> — míralo en <b>Valores en vivo</b> (abajo) y teclea los 4 dígitos.</p>')
+                    : '<p>El código es <b>aleatorio</b> y cambia en cada intento — búscalo en <b>Valores en vivo</b> (abajo), en "Código de autorización", y teclea los 4 dígitos.</p>')
                 + '<div class="keypad-display' + (keypadBad[id] ? " bad" : "") + '">' + disp + '</div>'
                 + (keypadBad[id] ? '<p class="cal-bad">❌ Código incorrecto — vuelve a intentarlo.</p>' : "")
                 + '<div class="keypad">'
@@ -913,16 +950,31 @@
               var dl = DIAL[slugOf(id)] || DIAL.eclss;
               var ddiff = getDifficulty();
               var dtol = ddiff === "facil" ? 2 : (ddiff === "medio" ? 1 : 0);
+              var dtarget = dialTargetFor(slugOf(id), id);
               var dv = (dialVal[id] !== undefined) ? dialVal[id] : Math.round((dl.min + dl.max) / 2);
               var ddis = (i === prog.done) ? "" : " disabled";
               var angle = -135 + ((dv - dl.min) / Math.max(1, dl.max - dl.min)) * 270;
-              return '<li><div class="cal-box"><b>🎛️ Paso ' + (i + 1) + " — " + esc(dl.param) + '</b>'
-                + '<p>Gira el potenciómetro hasta <b>' + dl.target + " " + esc(dl.unit) + '</b> (tolerancia ±' + dtol + ").</p>"
+              var dhtml = '<li><div class="cal-box"><b>🎛️ Paso ' + (i + 1) + " — " + esc(dl.param) + '</b>'
+                + '<p>Gira el potenciómetro hasta <b>' + dtarget + " " + esc(dl.unit) + '</b> (tolerancia ±' + dtol + "). El objetivo cambia en cada intento.</p>"
                 + '<div class="dial-wrap"><div class="dial" data-mod="' + esc(id) + '" data-step="' + i + '"' + ddis + '><div class="dial-pointer" style="transform:rotate(' + angle + 'deg)"></div></div>'
                 + '<div><div class="dial-val" id="dialVal-' + esc(id) + '">' + dv + " " + esc(dl.unit) + '</div>'
-                + '<div><button type="button" class="keypad-btn" data-mod="' + esc(id) + '" data-dial="-1"' + ddis + '>−</button> '
-                + '<button type="button" class="keypad-btn" data-mod="' + esc(id) + '" data-dial="1"' + ddis + '>+</button></div></div></div>'
-                + '<button type="button" class="repair-step" data-mod="' + esc(id) + '" data-step="' + i + '" data-dial-apply="1"' + ddis + '>Aplicar valor</button></div></li>';
+                + '<div><button type="button" class="keypad-btn" data-mod="' + esc(id) + '" data-dial="-1" data-dial-n="1"' + ddis + '>−</button> '
+                + '<button type="button" class="keypad-btn" data-mod="' + esc(id) + '" data-dial="1" data-dial-n="1"' + ddis + '>+</button></div></div></div>';
+              // v19.3: SEGUNDO potenciometro (medio/dificil).
+              if (ddiff !== "facil") {
+                var dl2 = DIAL2[slugOf(id)] || DIAL2.eclss;
+                var dtarget2 = dialTarget2For(slugOf(id), id);
+                var dv2 = (dialVal2[id] !== undefined) ? dialVal2[id] : Math.round((dl2.min + dl2.max) / 2);
+                var angle2 = -135 + ((dv2 - dl2.min) / Math.max(1, dl2.max - dl2.min)) * 270;
+                dhtml += '<b>🎛️ Segundo potenciómetro — ' + esc(dl2.param) + '</b>'
+                  + '<p>Gira el segundo potenciómetro hasta <b>' + dtarget2 + " " + esc(dl2.unit) + '</b> (tolerancia ±' + dtol + ").</p>"
+                  + '<div class="dial-wrap"><div class="dial" data-mod="' + esc(id) + '" data-step="' + i + '"' + ddis + '><div class="dial-pointer" style="transform:rotate(' + angle2 + 'deg)"></div></div>'
+                  + '<div><div class="dial-val" id="dialVal2-' + esc(id) + '">' + dv2 + " " + esc(dl2.unit) + '</div>'
+                  + '<div><button type="button" class="keypad-btn" data-mod="' + esc(id) + '" data-dial="-1" data-dial-n="2"' + ddis + '>−</button> '
+                  + '<button type="button" class="keypad-btn" data-mod="' + esc(id) + '" data-dial="1" data-dial-n="2"' + ddis + '>+</button></div></div></div>';
+              }
+              dhtml += '<button type="button" class="repair-step" data-mod="' + esc(id) + '" data-step="' + i + '" data-dial-apply="1"' + ddis + '>Aplicar valor</button></div></li>';
+              return dhtml;
             }
             // v19: CONEXIONES — conectar cada cable a su puerto correcto.
             if (s.kind === "wires") {
@@ -1083,6 +1135,12 @@
               + '<span class="lv-src">Fuente: ' + esc(r.source) + '</span></span>'
               + '<span class="lv-num' + (v === null ? ' na' : '') + '">' + (v === null ? "—" : esc(v) + esc(r.unit)) + '</span></div>';
           });
+          // v19.3: en dificil el codigo del teclado (aleatorio) se busca
+          // aqui, en la telemetria, como "Codigo de autorizacion".
+          if (getDifficulty() === "dificil" && (MECHANIC[slugOf(id)] === "keypad") && keypadCode[id]) {
+            html += '<div class="live-val"><span class="lv-name">Código de autorización<span class="lv-src">Fuente: telemetría de la estación</span></span>'
+              + '<span class="lv-num">' + esc(keypadCode[id]) + '</span></div>';
+          }
           html += '<p class="muted">Valores reales de las APIs de la NASA (no simulados). Se actualizan cada 60 s.</p>';
         }
         html += "</div>";

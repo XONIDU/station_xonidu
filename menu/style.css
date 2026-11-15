@@ -66,14 +66,13 @@ body{display:grid;place-items:center;overflow:hidden}
 
 /* ---------- Botón Metrics (HTML, fuera de la imagen) ---------- */
 .top-right-btns{position:absolute;top:1.5%;right:1.5%;z-index:5;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:70%}
-@media(max-width:820px) and (orientation:portrait){
-  /* v19.2: el menu se adapta a la pantalla por defecto. En vertical la
-     imagen quedaba como una tira (390x220) y los botones de ~15 px no se
-     podian tocar. Ahora el escenario llena la pantalla y la imagen cubre
-     (se recortan los lados, el centro —donde estan los botones— queda). */
-  .stage{width:100vw;height:100dvh;max-height:100dvh;aspect-ratio:auto}
-  .stage img{object-fit:cover;object-position:center}
-}
+/* v19.3: en vertical el menu NO recorta la imagen (el cover de v19.2
+   la hacia demasiado grande y cortaba los lados). La imagen se ve ENTERA
+   como tira a lo ancho, y debajo aparecen 4 botones HTML grandes (los
+   mismos 4 del menu) para tocarlos con el dedo. Sin espacio muerto y sin
+   nada cortado. */
+.mobile-menu{display:none}
+
 @media(max-width:820px){
   /* v18: en el telefono los 4 botones de arriba (Metricas, Dificultad,
      Componentes, Datos NASA) se apilan en 2 filas sin tapar la imagen. */
@@ -115,3 +114,69 @@ body{display:grid;place-items:center;overflow:hidden}
 .diff-opt .diff-fails.easy{color:#2ecc71}
 .diff-opt .diff-fails.medium{color:#f1c40f}
 .diff-opt .diff-fails.hard{color:#e74c3c}
+
+
+/* =====================================================================
+   v20 — Maquetacion para PC y movil
+   ===================================================================== */
+
+/* La tarjeta de paneles nunca se sale de la pantalla (dvh = barra del navegador movil). */
+.card{max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px)}
+
+/* PC y horizontal: los 4 botones de arriba van en COLUMNA a la derecha y
+   ya no tapan el titulo del juego (que ocupa del 29 % al 70 % del ancho). */
+.top-right-btns{flex-direction:column;flex-wrap:nowrap;align-items:stretch;justify-content:flex-start;
+  max-width:none;gap:clamp(4px,.45cqw,8px)}
+.top-right-btns .metrics-top-btn,.top-right-btns .diff-top-btn{
+  font-size:clamp(11px,1.15cqw,16px);padding:clamp(5px,.5cqw,10px) clamp(9px,1cqw,16px);
+  white-space:nowrap;text-align:left}
+.lang-top-btn{font-size:clamp(11px,1.15cqw,16px)}
+
+/* Movil horizontal (pantalla baja): todo mas compacto, sin scroll. */
+@media (max-height:520px) and (orientation:landscape){
+  .top-right-btns{gap:3px}
+  .top-right-btns .metrics-top-btn,.top-right-btns .diff-top-btn{font-size:10px;padding:3px 7px}
+  .lang-top-btn{font-size:10px;padding:3px 7px}
+  .card{padding:14px;max-width:min(94vw,760px)}
+  .card h2{font-size:17px;margin-bottom:6px}
+  .card > button{margin-top:8px;padding:6px 10px}
+  #metricsBtn{display:none}            /* ya existe el boton de arriba; asi el contenido tiene mas alto */
+  .ms-save{position:static}            /* en pantalla baja el boton Guardar va al final del contenido, no flotando encima */
+  .metrics-card p{font-size:13px}
+}
+
+/* Movil / tablet VERTICAL: ya no se encoge la imagen entera.
+   De arriba a abajo: banner (imagen recortada sin su barra vacia), barra de
+   datos en HTML (PUNTAJE · MASA · ENERGIA · PRESUPUESTO · DATOS), 4 botones
+   grandes y, al final, los botones de Metricas / Dificultad / Componentes /
+   Datos NASA en rejilla de 2 columnas. */
+@media (max-width:820px) and (orientation:portrait){
+  body{display:block;height:auto;min-height:100%;overflow-x:hidden;overflow-y:auto}
+  .stage{display:flex;flex-direction:column;width:100%;max-width:720px;height:auto;aspect-ratio:auto;margin:0 auto}
+  .stage img{order:1;width:100%;height:auto;aspect-ratio:1600/790;object-fit:cover;object-position:top}
+  .stage #buttons{display:none}                       /* se usan los botones grandes de abajo */
+
+  .stage .hud{order:2;position:static;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:8px 10px 0}
+  .stage .hud .cell{position:static!important;left:auto!important;top:auto!important;
+    width:auto!important;height:auto!important;min-width:0;padding:6px 2px;
+    border:1px solid var(--line);border-radius:8px}
+  .stage .hud .cell.ok{background:#16233a}
+  .stage .hud .lbl{font-size:8px;letter-spacing:.02em;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stage .hud .val{font-size:13px;max-width:100%;white-space:nowrap}
+
+  .stage .mobile-menu{order:3;display:flex;flex-direction:column;gap:12px;padding:14px 16px 6px;width:100%}
+  .mobile-menu .mm-btn{min-height:56px;font-size:17px;font-weight:700;letter-spacing:1px;color:#eaf7ff;
+    background:#12233d;border:2px solid #1e4a5a;border-radius:12px;cursor:pointer;padding:12px 16px;
+    text-transform:uppercase;font-family:inherit}
+  .mobile-menu .mm-btn:active,.mobile-menu .mm-btn:hover{border-color:#00e5ff;background:#16414f}
+  .mobile-menu .mm-btn.start{background:#0b3b2e;border-color:#1fbf8f;color:#d8ffe9}
+
+  .stage .lang-top-btn{position:absolute;top:8px;left:8px;font-size:13px;padding:6px 10px}
+  .stage .top-right-btns{order:4;position:static;display:grid;grid-template-columns:1fr 1fr;gap:8px;
+    width:100%;max-width:none;padding:10px 16px 24px}
+  .stage .top-right-btns button{min-height:44px;font-size:14px;padding:8px 10px;text-align:center;white-space:normal}
+
+  .toast{position:fixed;top:10px;left:50%;z-index:20}
+  .detail{padding:10px}
+  .card{max-width:100%;padding:16px}
+}
