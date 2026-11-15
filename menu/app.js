@@ -108,6 +108,29 @@ const LAUNCHERS = [
 ];
 
 const STORE_KEY = "xonidu-mission-v1";
+// v19.2: segundos en warn (amarillo) antes de crit (rojo) que el usuario
+// cambio a mano, por dificultad. Si hay uno guardado, manda sobre el
+// preset (facil 60 / medio 40 / dificil 30) y sobrevive a cambiar de
+// dificultad y a reiniciar el servidor (se re-aplica al elegir dificultad).
+const CUSTOM_WINDOW_KEY = "xonidu-attend-window-v1";
+function getCustomWindow(key) {
+  try {
+    const all = JSON.parse(localStorage.getItem(CUSTOM_WINDOW_KEY) || "{}") || {};
+    const v = Number(all[key]);
+    return (v >= 5 && v <= 120) ? v : null;
+  } catch (e) { return null; }
+}
+function setCustomWindow(key, value) {
+  try {
+    const all = JSON.parse(localStorage.getItem(CUSTOM_WINDOW_KEY) || "{}") || {};
+    all[key] = Math.max(5, Math.min(120, Math.round(Number(value) || 40)));
+    localStorage.setItem(CUSTOM_WINDOW_KEY, JSON.stringify(all));
+    return all[key];
+  } catch (e) { return null; }
+}
+function effectiveWindow(key) {
+  return getCustomWindow(key) || (DIFFICULTY_PRESETS[key] && DIFFICULTY_PRESETS[key].attend_window_sec) || 40;
+}
 const CONFIG_KEY = "xonidu-config-v1";
 const LANG_KEY = "xonidu-lang";
 const MISSION_DAYS_KEY = "xonidu-mission-days";
@@ -141,9 +164,9 @@ const DIFFICULTY_DEFAULT_COMPONENTS = {
   dificil: {}
 };
 const DIFFICULTY_PRESETS = {
-  facil:   { days: 5, min_per_day: 1, kp_warn: 5, kp_crit: 7, cme_speed_warn: 350, flr_min_class: "M", attend_window_sec: 30, event_fresh_hours: 24 },
-  medio:   { days: 5, min_per_day: 2, kp_warn: 5, kp_crit: 7, cme_speed_warn: 350, flr_min_class: "M", attend_window_sec: 20, event_fresh_hours: 96 },
-  dificil: { days: 5, min_per_day: 3, kp_warn: 4, kp_crit: 6, cme_speed_warn: 300, flr_min_class: "C", attend_window_sec: 15, event_fresh_hours: 120 }
+  facil:   { days: 5, min_per_day: 1, kp_warn: 5, kp_crit: 7, cme_speed_warn: 350, flr_min_class: "M", attend_window_sec: 60, event_fresh_hours: 24 },
+  medio:   { days: 5, min_per_day: 2, kp_warn: 5, kp_crit: 7, cme_speed_warn: 350, flr_min_class: "M", attend_window_sec: 40, event_fresh_hours: 96 },
+  dificil: { days: 5, min_per_day: 3, kp_warn: 4, kp_crit: 6, cme_speed_warn: 300, flr_min_class: "C", attend_window_sec: 30, event_fresh_hours: 120 }
 };
 let difficulty = "medio";
 try {
@@ -160,7 +183,7 @@ function difficultyName() {
 // valores por defecto. El panel Metrics permite verla y cambiarla.
 const DEFAULT_CONFIG = {
   kp_warn: 5, kp_crit: 7, cme_speed_warn: 500, event_fresh_hours: 24,
-  attend_window_sec: 20,
+  attend_window_sec: 40,
   score_base: 100, orbit_fit: 20, orbit_miss: -15,
   launcher_fit: 10, launcher_miss: -10,
   mass_penalty: -20, budget_penalty: -10, budget_cap: 500,
@@ -640,9 +663,53 @@ function renderDifficulty() {
       + '<span class="diff-fails ' + failsCls + '">' + t(failsKey) + "</span></button>";
   });
   html += '<p class="ms-sub" id="diffMsg"></p>';
+  // v19.2: control para cambiar los segundos en amarillo (warn) antes de
+  // rojo (crit) de la dificultad elegida, sin tocar codigo. Se guarda por
+  // dificultad y manda sobre el preset (facil 60 / medio 40 / dificil 30).
+  const curWin = effectiveWindow(difficulty);
+  html += '<h3 class="ms-h">⏱ Tiempo en amarillo antes de rojo</h3>'
+    + '<p class="ms-sub">Segundos que un módulo pasa en warn (amarillo) sin atender antes de escalar a crit (rojo), para la dificultad elegida (' + difficultyName() + ').</p>'
+    + '<label class="ms-field"><span>Segundos en warn</span>'
+    + '<input type="number" id="winNum" min="5" max="120" value="' + curWin + '">'
+    + '<input type="range" id="winRange" min="5" max="120" value="' + curWin + '">'
+    + '<em>s</em></label>'
+    + '<button type="button" id="winSave" class="ms-save">💾 Guardar tiempo (' + curWin + ' s)</button>'
+    + '<span id="winSaved" class="ms-saved"></span>';
   box.innerHTML = html;
   box.querySelectorAll(".diff-opt").forEach(btn => {
     btn.addEventListener("click", () => { applyDifficulty(btn.dataset.id); });
+  });
+  // Numero y deslizador sincronizados; al guardar, se aplica y se re-muestra.
+  const winNum = box.querySelector("#winNum"), winRange = box.querySelector("#winRange");
+  const syncWin = (v) => {
+    const n = Math.max(5, Math.min(120, Math.round(Number(v) || curWin)));
+    if (winNum) winNum.value = n;
+    if (winRange) winRange.value = n;
+    const saveBtn = box.querySelector("#winSave");
+    if (saveBtn) saveBtn.textContent = "💾 Guardar tiempo (" + n + " s)";
+    return n;
+  };
+  if (winNum) winNum.addEventListener("input", () => syncWin(winNum.value));
+  if (winRange) winRange.addEventListener("input", () => syncWin(winRange.value));
+  const winSave = box.querySelector("#winSave");
+  if (winSave) winSave.addEventListener("click", () => {
+    const v = syncWin(winNum ? winNum.value : curWin);
+    setCustomWindow(difficulty, v);
+    CFG.attend_window_sec = v;
+    try { localStorage.setItem(CONFIG_KEY, JSON.stringify(CFG)); } catch (e) {}
+    fetch("/api/config", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attend_window_sec: v }) })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        const msg = box.querySelector("#winSaved");
+        if (msg) msg.textContent = (d && d.ok) ? "✓ Guardado en el servidor (" + v + " s)" : "✓ Guardado en este dispositivo (" + v + " s)";
+        renderDifficulty();
+      }).catch(() => {
+        const msg = box.querySelector("#winSaved");
+        if (msg) msg.textContent = "✓ Guardado en este dispositivo (" + v + " s)";
+        renderDifficulty();
+      });
   });
 }
 
@@ -669,6 +736,15 @@ function applyDifficulty(key) {
     .then(d => {
       if (d && d.config) {
         CFG = Object.assign({}, DEFAULT_CONFIG, d.config);
+        // v19.2: si el usuario personalizo la ventana de esta dificultad,
+        // manda sobre el preset (el backend la guarda en game_config.json).
+        const cw = getCustomWindow(key);
+        if (cw != null) {
+          CFG.attend_window_sec = cw;
+          fetch("/api/config", { method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ attend_window_sec: cw }) }).catch(() => {});
+        }
         try { localStorage.setItem(CONFIG_KEY, JSON.stringify(CFG)); } catch (e) {}
       }
       const msg = $("#diffMsg");
@@ -874,7 +950,7 @@ const CONFIG_FIELDS = [
   { key:"kp_crit", label:"Kp crit — tormenta fuerte (radiación crit)", labelEn:"Kp crit — strong storm (radiation crit)", unit:"Kp" },
   { key:"cme_speed_warn", label:"CME rápida — velocidad mínima para alerta de energía", labelEn:"Fast CME — minimum speed for power alert", unit:"km/s" },
   { key:"event_fresh_hours", label:"Antigüedad máxima de un evento FLR/CME para aplicarlo", labelEn:"Maximum age of a FLR/CME event to apply", unit:"h" },
-  { key:"attend_window_min", label:"Minutos en warn sin atender antes de escalar a crit", labelEn:"Minutes in warn unattended before escalating to crit", unit:"min" },
+  { key:"attend_window_sec", label:"Segundos en warn (amarillo) sin atender antes de escalar a crit (rojo)", labelEn:"Seconds in warn (yellow) unattended before escalating to crit (red)", unit:"s" },
   { key:"score_base", label:"Puntaje base de la misión", labelEn:"Mission base score", unit:"pts" },
   { key:"orbit_fit", label:"Órbita correcta", labelEn:"Correct orbit", unit:"pts" },
   { key:"orbit_miss", label:"Órbita incorrecta", labelEn:"Incorrect orbit", unit:"pts" },
@@ -905,7 +981,7 @@ function renderMetrics() {
   form.innerHTML = CONFIG_FIELDS.map(f =>
     '<label class="ms-field"><span>' + configFieldLabel(f) + '</span>'
     + '<input type="number" data-key="' + f.key + '" value="' + CFG[f.key] + '">'
-    + (f.key === "attend_window_min" ? '<input type="range" data-key="' + f.key + '" min="1" max="120" value="' + CFG[f.key] + '">' : "")
+    + (f.key === "attend_window_sec" ? '<input type="range" data-key="' + f.key + '" min="5" max="120" value="' + CFG[f.key] + '">' : "")
     + '<em>' + f.unit + '</em></label>'
   ).join("");
   // Numero y deslizador del mismo campo se mantienen sincronizados.

@@ -298,10 +298,11 @@ function showEndScreen(m) {
     + row("Completar la misión", "+" + (s.complete || 0) + " pts")
     + row("Reparaciones (" + (s.n_repairs || 0) + " × 50)", "+" + (s.repairs || 0) + " pts")
     + row("Módulos en crítico (" + (s.n_crits || 0) + " × −50)", (s.crits || 0) + " pts")
+    + (s.penalties ? row("Diagnósticos errados (" + (s.n_penalties || 0) + " × −10)", (s.penalties || 0) + " pts") : "")
     + row("Datos científicos (DATA)", "+" + (s.data || 0) + " pts")
     + row("Combustible (se agotó antes de terminar)", (s.fuel || 0) + " pts")
     + (s.drain ? row("Drenaje (módulos en crítico sin atender)", (s.drain || 0) + " pts") : "")
-    + (m.failed ? row("La estación quedó inoperable", "—") : "")
+    + (m.failed ? row("Motivo del fallo", (s.n_crits || 0) >= 6 ? "6+ módulos en crítico" : "El score llegó a 0") : "")
     + '<div class="row total"><span>SCORE TOTAL</span><span>' + (s.total || 0) + " pts</span></div>";
   const fuel = m.fuel || {};
   if (fuel.capacity) {
@@ -380,17 +381,34 @@ document.getElementById("endRestartBtn").addEventListener("click", () => { resta
 // Reiniciar: vuelve a lanzar la misma mision desde el Dia 1 (v13: es una
 // funcion con nombre para que tambien la use el boton "Jugar otra vez" de
 // la pantalla de fin de mision).
+// Normaliza un valor guardado a string (un localStorage viejo guarda el
+// objetivo como objeto {id, title}; el backend lo espera como string).
+function _str(v) {
+  if (v && typeof v === "object") return String(v.id || v.title || v.name || "");
+  return (v == null ? "" : String(v));
+}
 async function restartMission() {
   if (!confirm("¿Reiniciar la partida? El reloj vuelve al Día 1 y las anomalías activas se vuelven a aplicar.")) return;
   let cfg = {};
   try { cfg = JSON.parse(localStorage.getItem("xonidu-mission-v1") || "{}") || {}; } catch (e) {}
   const difficulty = localStorage.getItem("xonidu-difficulty-v1") || "medio";
   const days = parseInt(localStorage.getItem("xonidu-mission-days") || "5", 10) || 5;
+  let ok = false;
   try {
-    await fetch("/api/mission/start", { method: "POST",
+    const r = await fetch("/api/mission/start", { method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ objetivo: cfg.objetivo, orbita: cfg.orbita, lanzador: cfg.lanzador, difficulty, days, fit_score: cfg.score || 0, components: cfg.components || {} }) });
-  } catch (e) { /* sin backend: recargar igual */ }
+      body: JSON.stringify({ objetivo: _str(cfg.objetivo), orbita: _str(cfg.orbita), lanzador: _str(cfg.lanzador), difficulty, days, fit_score: cfg.score || 0, components: cfg.components || {} }) });
+    ok = r.ok;
+  } catch (e) { ok = false; }
+  if (!ok) {
+    // Antes recargaba igual aunque el POST fallara, y volvia la misma
+    // mision fallida: parecia que "no reinicia". Ahora avisa y no recarga.
+    alert("No se pudo reiniciar: no hay conexión con el servidor del juego. Revisa que el backend esté corriendo y vuelve a intentarlo.");
+    return;
+  }
+  // Ocultar la pantalla de fin de inmediato para que se vea el reinicio.
+  const sec = document.getElementById("endScreen");
+  if (sec) sec.hidden = true;
   location.reload();
 }
 document.getElementById("restartBtn").addEventListener("click", restartMission);

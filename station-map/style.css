@@ -58,9 +58,20 @@ body{display:flex;flex-direction:column}
   .zone-grid-btn.warn{border-color:#f1c40f;animation:polypulseWarn 1.2s infinite}
   .zone-grid-btn.crit{border-color:#e74c3c;animation:polypulseCrit .5s infinite}
   .zone-grid-btn.sel{outline:2px solid #00e5ff;outline-offset:2px}
-  /* v18: la pantalla de fin de mision (score) cabe en el telefono. */
-  .end-card{padding:18px 14px}
-  .end-score{font-size:22px}
+  /* v19.2: la pantalla de fin de mision (score) cabe en el telefono.
+     La v18 puso .end-score{font-size:22px} y las filas no cabian en 390 px:
+     la tarjeta se salia por la derecha. Fuente mas chica y filas que se
+     parten en dos lineas en vez de desbordar. */
+  .end-screen{padding:10px}
+  .end-card{padding:18px 14px;max-width:100%}
+  .end-card h2{font-size:20px}
+  .end-score{font-size:14px}
+  .end-score .row{flex-wrap:wrap;gap:4px 10px}
+  .end-score .row span{flex:1 1 auto}
+  .end-score .row b{white-space:nowrap}
+  .end-score .row.total{font-size:16px}
+  .end-actions{flex-direction:column}
+  .end-actions .primary,.end-actions .ghost{width:100%}
 }
 
 /* ---------- Imagen + zonas ---------- */

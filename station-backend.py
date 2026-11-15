@@ -118,7 +118,7 @@ DEFAULT_GAME_CONFIG = {
     "kp_crit": 7,            # Kp >= 7 -> radiacion crit
     "cme_speed_warn": 350,   # km/s: CME mas rapida -> energia warn
     "event_fresh_hours": 96, # antiguedad maxima de un evento FLR/CME para aplicarlo
-    "attend_window_sec": 20,  # v19: SEGUNDOS en warn sin atender antes de escalar a crit (facil 30, medio 20, dificil 15)
+    "attend_window_sec": 40,  # v19.1: SEGUNDOS en warn sin atender antes de escalar a crit (Darian lo puso en 40 s; se cambia en el panel Metrics o en DIFFICULTY_PRESETS)
     # Scoring de mision (lo calcula el menu)
     "score_base": 100,
     "orbit_fit": 20, "orbit_miss": -15,
@@ -141,13 +141,13 @@ CONFIG_PATH = Path(__file__).resolve().parent / "game_config.json"
 # y menos tiempo para atenderlas antes de que escalen a crit.
 DIFFICULTY_PRESETS = {
     "facil":   {"mission_days": 5, "min_per_day": 1, "kp_warn": 5, "kp_crit": 7,
-                "cme_speed_warn": 350, "flr_min_class": "M", "attend_window_sec": 30,
+                "cme_speed_warn": 350, "flr_min_class": "M", "attend_window_sec": 60,
                 "event_fresh_hours": 24},
     "medio":   {"mission_days": 5, "min_per_day": 2, "kp_warn": 5, "kp_crit": 7,
-                "cme_speed_warn": 350, "flr_min_class": "M", "attend_window_sec": 20,
+                "cme_speed_warn": 350, "flr_min_class": "M", "attend_window_sec": 40,
                 "event_fresh_hours": 96},
     "dificil": {"mission_days": 5, "min_per_day": 3, "kp_warn": 4, "kp_crit": 6,
-                "cme_speed_warn": 300, "flr_min_class": "C", "attend_window_sec": 15,
+                "cme_speed_warn": 300, "flr_min_class": "C", "attend_window_sec": 30,
                 "event_fresh_hours": 120},
 }
 
@@ -186,6 +186,16 @@ DATA_MISSIONS = {"CUBESAT DEPLOY", "MICROGRAVITY SCIENCE",
                  "EARTH OBSERVATION", "ASTRONOMY"}
 
 
+def _as_str(v):
+    """Normaliza un valor del menu a string: el objetivo/orbita/lanzador
+    llegan como string ("CARGO CAPTURE"), pero un localStorage viejo los
+    puede traer como objeto {id, title}. Sin esto, .upper() revienta y
+    el /api/mission/start (reiniciar) devuelve 500 y no reinicia."""
+    if isinstance(v, dict):
+        return str(v.get("id") or v.get("title") or v.get("name") or "")
+    return str(v or "")
+
+
 def mission_score():
     """Score de la mision (v13): desglose por decision y por fallas.
     fit = puntaje de diseno (orbita + lanzador) que manda el menu;
@@ -193,7 +203,7 @@ def mission_score():
     repairs = +50 por cada modulo reparado; crits = -50 por cada modulo
     que llego a crit; data = +40 si la mision genera DATA. El bonus de
     completar y el de DATA solo cuentan cuando la mision termino."""
-    obj = (MISSION.get("objetivo") or "").upper()
+    obj = _as_str(MISSION.get("objetivo")).upper()
     finished = False
     if MISSION["active"] and MISSION["start"]:
         total = MISSION["days"] * MISSION["min_per_day"]
@@ -279,8 +289,8 @@ def mission_status():
             "min_per_day": MISSION["min_per_day"],
             "minutes_elapsed": round(elapsed, 1), "minutes_total": total,
             "minutes_left": round(max(0.0, total - elapsed), 1),
-            "finished": finished, "failed": failed, "objetivo": MISSION["objetivo"],
-            "orbita": MISSION["orbita"], "lanzador": MISSION["lanzador"],
+            "finished": finished, "failed": failed, "objetivo": _as_str(MISSION["objetivo"]),
+            "orbita": _as_str(MISSION["orbita"]), "lanzador": _as_str(MISSION["lanzador"]),
             "fuel": {"capacity": cap, "burn_per_day": burn,
                      "remaining": round(fuel_remaining, 1),
                      "needed": burn * MISSION["days"]},
@@ -1377,8 +1387,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             MISSION.update({"active": True, "start": _utcnow(),
                             "difficulty": str(data.get("difficulty") or GAME_CONFIG.get("difficulty", "medio")),
                             "days": days, "min_per_day": min_per_day,
-                            "objetivo": data.get("objetivo"), "orbita": data.get("orbita"),
-                            "lanzador": data.get("lanzador"),
+                            "objetivo": _as_str(data.get("objetivo")), "orbita": _as_str(data.get("orbita")),
+                            "lanzador": _as_str(data.get("lanzador")),
                             "fit_score": int(data.get("fit_score") or 0),
                             "components": comps,
                             "fuel_capacity": fuel_cap, "fuel_burn": fuel_burn})

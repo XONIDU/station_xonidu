@@ -66,6 +66,14 @@ body{display:grid;place-items:center;overflow:hidden}
 
 /* ---------- Botón Metrics (HTML, fuera de la imagen) ---------- */
 .top-right-btns{position:absolute;top:1.5%;right:1.5%;z-index:5;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:70%}
+@media(max-width:820px) and (orientation:portrait){
+  /* v19.2: el menu se adapta a la pantalla por defecto. En vertical la
+     imagen quedaba como una tira (390x220) y los botones de ~15 px no se
+     podian tocar. Ahora el escenario llena la pantalla y la imagen cubre
+     (se recortan los lados, el centro —donde estan los botones— queda). */
+  .stage{width:100vw;height:100dvh;max-height:100dvh;aspect-ratio:auto}
+  .stage img{object-fit:cover;object-position:center}
+}
 @media(max-width:820px){
   /* v18: en el telefono los 4 botones de arriba (Metricas, Dificultad,
      Componentes, Datos NASA) se apilan en 2 filas sin tapar la imagen. */
