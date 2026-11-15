@@ -166,7 +166,7 @@ const DIFFICULTY_DEFAULT_COMPONENTS = {
 const DIFFICULTY_PRESETS = {
   facil:   { days: 5, min_per_day: 1, kp_warn: 6, kp_crit: 8, cme_speed_warn: 500, flr_min_class: "M", attend_window_sec: 120, event_fresh_hours: 24, max_anomalies: 2 },
   medio:   { days: 5, min_per_day: 2, kp_warn: 6, kp_crit: 8, cme_speed_warn: 500, flr_min_class: "M", attend_window_sec: 80, event_fresh_hours: 96, max_anomalies: 2 },
-  dificil: { days: 5, min_per_day: 3, kp_warn: 5, kp_crit: 7, cme_speed_warn: 450, flr_min_class: "M", attend_window_sec: 60, event_fresh_hours: 120, max_anomalies: 3 }
+  dificil: { days: 5, min_per_day: 3, kp_warn: 5, kp_crit: 7, cme_speed_warn: 450, flr_min_class: "M", attend_window_sec: 60, event_fresh_hours: 120, max_anomalies: 2 }
 };
 let difficulty = "medio";
 try {
@@ -1239,3 +1239,8 @@ function syncHud() {
 }
 
 syncHud(); route(); applyLang();
+
+window.addEventListener("station:missionreset", () => {
+  showToast("Otro jugador reinició la partida");
+  setTimeout(() => location.reload(), 1000);
+});

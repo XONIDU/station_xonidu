@@ -289,4 +289,13 @@ const hot = $("#mapHot"), mb = CONFIG.mapButton;
 Object.assign(hot.style, { left:mb.x+"%", top:mb.y+"%", width:mb.w+"%", height:mb.h+"%" });
 hot.addEventListener("click", goBack);
 
+function toast(msg) {
+  const el = $("#toast"); el.textContent = msg; el.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove("show"), 1600);
+}
+window.addEventListener("station:missionreset", () => {
+  toast("Otro jugador reinició la partida");
+  setTimeout(() => location.reload(), 1000);
+});
+
 render();

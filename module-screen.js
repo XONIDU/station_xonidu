@@ -505,6 +505,72 @@
         box.addEventListener("mouseleave", holdCancel);
         box.addEventListener("touchend", holdCancel);
         box.addEventListener("touchcancel", holdCancel);
+
+        // v20: POTENCIOMETRO — girar el mando con el mouse o el dedo (arrastrar).
+        var dialDragging = null;
+        function dialStart(e) {
+          var dial = e.target && e.target.closest ? e.target.closest(".dial") : null;
+          if (!dial) return;
+          var id = dial.getAttribute("data-mod");
+          var step = dial.getAttribute("data-step");
+          var ap = repairProgress[id];
+          if (!ap || parseInt(step, 10) !== ap.done || ap.busy !== -1) return;
+          e.preventDefault();
+          e.stopPropagation();
+          var wrap = dial.closest(".dial-wrap");
+          var valEl = wrap ? wrap.querySelector(".dial-val") : null;
+          var is2 = valEl && valEl.id && valEl.id.indexOf("dialVal2-") === 0;
+          var n = is2 ? "2" : "1";
+          var dl = (n === "2") ? (DIAL2[slugOf(id)] || DIAL2.eclss) : (DIAL[slugOf(id)] || DIAL.eclss);
+          var store = (n === "2") ? dialVal2 : dialVal;
+          var cur = (store[id] !== undefined) ? store[id] : Math.round((dl.min + dl.max) / 2);
+          var rect = dial.getBoundingClientRect();
+          var cx = rect.left + rect.width / 2;
+          var cy = rect.top + rect.height / 2;
+          var px = (e.touches && e.touches.length) ? e.touches[0].clientX : e.clientX;
+          var py = (e.touches && e.touches.length) ? e.touches[0].clientY : e.clientY;
+          var startAng = Math.atan2(px - cx, -(py - cy)) * 180 / Math.PI;
+          if (startAng > 180) startAng -= 360;
+          if (startAng < -180) startAng += 360;
+          dialDragging = { id: id, n: n, dl: dl, dial: dial, startAngle: startAng, startValue: cur };
+        }
+        box.addEventListener("mousedown", dialStart);
+        box.addEventListener("touchstart", dialStart, { passive: false });
+        function dialMove(e) {
+          if (!dialDragging) return;
+          e.preventDefault();
+          var px = (e.touches && e.touches.length) ? e.touches[0].clientX : e.clientX;
+          var py = (e.touches && e.touches.length) ? e.touches[0].clientY : e.clientY;
+          var rect = dialDragging.dial.getBoundingClientRect();
+          var cx = rect.left + rect.width / 2;
+          var cy = rect.top + rect.height / 2;
+          var ang = Math.atan2(px - cx, -(py - cy)) * 180 / Math.PI;
+          if (ang > 180) ang -= 360;
+          if (ang < -180) ang += 360;
+          var delta = ang - dialDragging.startAngle;
+          while (delta > 180) delta -= 360;
+          while (delta < -180) delta += 360;
+          var dl = dialDragging.dl;
+          var span = dl.max - dl.min;
+          var val = dialDragging.startValue + Math.round((delta / 270) * span);
+          val = Math.max(dl.min, Math.min(dl.max, val));
+          var store = (dialDragging.n === "2") ? dialVal2 : dialVal;
+          store[dialDragging.id] = val;
+          var a2 = -135 + ((val - dl.min) / Math.max(1, span)) * 270;
+          var ptr = dialDragging.dial.querySelector(".dial-pointer");
+          if (ptr) ptr.style.transform = "rotate(" + a2 + "deg)";
+          var vid = (dialDragging.n === "2") ? ("dialVal2-" + esc(dialDragging.id)) : ("dialVal-" + esc(dialDragging.id));
+          var ve = document.getElementById(vid);
+          if (ve) ve.textContent = String(val) + " " + esc(dl.unit);
+        }
+        function dialEnd() {
+          dialDragging = null;
+        }
+        document.addEventListener("mousemove", dialMove);
+        document.addEventListener("touchmove", dialMove, { passive: false });
+        document.addEventListener("mouseup", dialEnd);
+        document.addEventListener("touchend", dialEnd);
+        document.addEventListener("touchcancel", dialEnd);
         box.addEventListener("click", function (e) {
           // v19: TECLADO NUMERICO — teclear el codigo de 4 digitos.
           var kb = e.target && e.target.closest ? e.target.closest(".keypad-btn[data-key]") : null;

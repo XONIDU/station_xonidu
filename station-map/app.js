@@ -299,6 +299,7 @@ function showEndScreen(m) {
     + row("Combustible (se agotó antes de terminar)", (s.fuel || 0) + " pts")
     + (s.drain ? row("Drenaje (módulos en crítico sin atender)", (s.drain || 0) + " pts") : "")
     + (m.failed ? row("Motivo del fallo", (s.n_crits || 0) >= 6 ? "6+ módulos en crítico" : "El score llegó a 0") : "")
+    + row("Integridad de la misión", (s.integrity !== undefined ? Math.round(s.integrity) : 100) + "%")
     + '<div class="row total"><span>SCORE TOTAL</span><span>' + (s.total || 0) + " pts</span></div>";
   const fuel = m.fuel || {};
   if (fuel.capacity) {
@@ -341,6 +342,10 @@ function renderClock() {
   el.textContent = "Día " + day + "/" + m.days_total;
   el.classList.remove("finished");
   clk.textContent = "⏱ " + fmtMS(dayLeftSec) + " · restan " + fmtHM(Math.max(0, (m.minutes_total || 0) - elapsedMin));
+  // Integridad de la mision (baja mientras haya modulos en crit).
+  var integ = m.integrity !== undefined ? Math.round(m.integrity) : 100;
+  var integCls = integ >= 50 ? "" : (integ >= 25 ? " warn" : " crit");
+  clk.textContent += " · Integridad " + integ + "%";
   clk.style.display = "";
 }
 function syncMissionDay() {
@@ -412,4 +417,9 @@ document.getElementById("restartBtn").addEventListener("click", restartMission);
 // sesión al entrar, así que hay que iniciar la misión desde ahí).
 document.getElementById("menuBtn").addEventListener("click", () => {
   location.href = "../menu/index.html";
+});
+
+window.addEventListener("station:missionreset", () => {
+  toast("Otro jugador reinició la partida");
+  setTimeout(() => location.reload(), 1000);
 });

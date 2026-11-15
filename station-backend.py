@@ -177,6 +177,10 @@ MISSION = {"active": False, "start": None, "difficulty": "medio",
 # completadas (el jugador atendio un modulo en warn/crit) y modulos que
 # llegaron a crit. Se reinician en cada POST /api/mission/start.
 MISSION_STATS = {"repairs": 0, "crits": 0, "penalties": 0, "drain": 0}
+# Mission Integrity: 100 al inicio. Cada modulo en crit sin atender la baja
+# (1 punto por segundo, aplicado en cada tick del orquestador). En 0, la
+# mision fracasa (condicion de derrota).
+MISSION_INTEGRITY = 100
 # Modulos reforzados (v15): un modulo reforzado tarda el DOBLE en escalar
 # de warn a crit (el jugador se preparo para la falla).
 REINFORCED = set()
@@ -272,6 +276,10 @@ def mission_status():
             failed = True
             MISSION["failed"] = True
             print(f"[mision] FALLIDA: {n_crit} modulos en crit (estacion inoperable)")
+        elif MISSION_INTEGRITY <= 0:
+            failed = True
+            MISSION["failed"] = True
+            print("[mision] FALLIDA: Mission Integrity llego a 0")
         elif mission_score()["total"] <= 0 and (MISSION.get("fit_score") or 0) > 0:
             failed = True
             MISSION["failed"] = True
@@ -296,6 +304,7 @@ def mission_status():
             "fuel": {"capacity": cap, "burn_per_day": burn,
                      "remaining": round(fuel_remaining, 1),
                      "needed": burn * MISSION["days"]},
+            "integrity": round(MISSION_INTEGRITY, 1),
             "score": mission_score()}
 
 
@@ -347,7 +356,7 @@ RANK = {"ok": 0, "warn": 1, "crit": 2}
 PENDING_ANOMALIES = []  # [{zona, slug, nivel, reason}]
 
 # v19.4: marca de tiempo de la ultima reparacion (un modulo paso a ok).
-# Mientras no hayan pasado 30 s desde la reparacion,
+# Mientras no hayan pasado 60 s desde la reparacion,
 # _drain_pending_anomalies no suelta la siguiente anomalia de la cola, para
 # no disparar dos anomalias seguidas justo al reparar.
 LAST_REPAIR_TS = None
@@ -370,13 +379,25 @@ def _sync_pending_state():
 
 
 def _apply_nasa_anomaly(zona, slug, nivel, reason=""):
-    """Aplica una anomalia de la NASA respetando el tope. Si no hay hueco,
-    la deja en cola para que salga sola cuando se libere uno. Devuelve
-    True si se aplico, False si quedo en cola."""
+    """Aplica una anomalia de la NASA respetando el tope y el freno de 30 s.
+    Si no hay hueco o si se reparo hace menos de 30 s, la deja en cola para
+    que salga sola cuando se libere uno. Devuelve True si se aplico,
+    False si quedo en cola."""
+    global LAST_REPAIR_TS
     cur = STATE["modulos"].get(zona, {}).get(slug)
     if cur in ("warn", "crit"):
         return True  # ya es una anomalia activa, no suma al tope
     if cur not in ("ok", "pre"):
+        return False
+    # v19.4: freno de 60 s (1 minuto) tras reparar. Mientras no pasen los 60 s,
+    # ninguna anomalia nueva de la NASA se aplica al instante: queda en cola.
+    if LAST_REPAIR_TS is not None and (_utcnow() - LAST_REPAIR_TS).total_seconds() < 60:
+        if not any(x["zona"] == zona and x["slug"] == slug for x in PENDING_ANOMALIES):
+            PENDING_ANOMALIES.append({"zona": zona, "slug": slug,
+                                      "nivel": nivel, "reason": reason})
+            _sync_pending_state()
+            print(f"[NASA] Anomalia bloqueada por freno (60s): {zona}.{slug} "
+                  f"-> {nivel} (en cola)")
         return False
     if _count_anomalies() >= _max_anomalies():
         if not any(x["zona"] == zona and x["slug"] == slug for x in PENDING_ANOMALIES):
@@ -391,10 +412,10 @@ def _apply_nasa_anomaly(zona, slug, nivel, reason=""):
 
 def _drain_pending_anomalies():
     """Saca anomalias de la cola mientras haya hueco (al reparar un modulo
-    y en cada poll de la NASA). Freno: tras reparar un modulo, espera 30 s
+    y en cada poll de la NASA). Freno: tras reparar un modulo, espera 60 s
     antes de soltar la siguiente anomalia en cola."""
     global LAST_REPAIR_TS
-    if LAST_REPAIR_TS is not None and (_utcnow() - LAST_REPAIR_TS).total_seconds() < 30:
+    if LAST_REPAIR_TS is not None and (_utcnow() - LAST_REPAIR_TS).total_seconds() < 60:
         return
     while PENDING_ANOMALIES and _count_anomalies() < _max_anomalies():
         nxt = PENDING_ANOMALIES.pop(0)
@@ -427,12 +448,23 @@ def _set_module_state(zona, slug, nivel):
     elif nivel == "ok":
         WARN_SINCE.pop(key, None)
         STATE["warn_since"].pop(key, None)
+        # v20: si el jugador reparo este modulo antes de que saliera la
+        # anomalia pendiente, la cancelamos para que no dispare ahora.
+        PENDING_ANOMALIES[:] = [x for x in PENDING_ANOMALIES
+                                if not (x["zona"] == zona and x["slug"] == slug)]
+        _sync_pending_state()
+        # Contamos la reparacion para el score final (+50 pts cada una).
+        try:
+            MISSION_STATS["repairs"] = int(MISSION_STATS.get("repairs", 0)) + 1
+        except Exception:
+            pass
         # Al reparar, el refuerzo se gasta (hay que volver a reforzar).
         REINFORCED.discard(key)
         STATE["reinforced"] = sorted(REINFORCED)
-        # Anotamos la reparacion para el freno de 30 s del drenaje.
+        # Anotamos la reparacion para el freno de 60 s del drenaje.
         LAST_REPAIR_TS = _utcnow()
-        # v19.3: se libero un hueco -> que salga la siguiente anomalia en cola.
+        # v19.3: se libero un hueco -> que salga la siguiente anomalia en cola
+        # (respectando el freno de 60 s, asi que no sale de inmediato).
         _drain_pending_anomalies()
     return True
 
@@ -1163,6 +1195,57 @@ def procesar_eventos_nasa():
 
 
 # ---------------------------------------------------------------------------
+# v20: Eventos reales de la ISS (catálogo, no datos NASA en vivo).
+# Se aplican al iniciar una mision segun la amenaza de cada mision (mecanicas
+# §2 y §7). Son eventos discretos: se aplican una vez y sus modulos se
+# recuperan cuando el evento caduca (o al reiniciar la partida).
+ISS_EVENTS = {
+    # Nauka 29 jul 2021: actitud de la estacion. Amenaza misiones 1 y 2.
+    "nauka_2021": {"modules": [("d", "navigation"), ("f", "propulsion")],
+                   "level": "warn", "reason": "Nauka 2021 (actitud)"},
+    # Soyuz MS-22 dic 2022: fuga de refrigerante. Amenaza misiones 5 y 8.
+    "soyuz_ms22_2022": {"modules": [("c", "thermal")],
+                        "level": "warn", "reason": "Soyuz MS-22 2022 (refrigerante)"},
+    # Fuga de aire Zvezda ago 2020: estructura + ECLSS. Amenaza misiones 2 y 3.
+    "zvezda_2020": {"modules": [("e", "structure"), ("c", "eclss")],
+                    "level": "warn", "reason": "Fuga de aire Zvezda 2020"},
+    # ASAT 2021: debris en navegacion. Amenaza misiones 1 y 4.
+    "asat_2021": {"modules": [("d", "navigation"), ("e", "structure")],
+                  "level": "warn", "reason": "ASAT 2021 (debris)"},
+}
+# Mapa mision (id en mayusculas) -> lista de claves ISS_EVENTS que la amenazan.
+ISS_BY_MISSION = {
+    "SATELLITE REPAIR": ["nauka_2021", "asat_2021"],
+    "CARGO CAPTURE": ["nauka_2021", "zvezda_2020"],
+    "SPACEWALK (EVA)": ["zvezda_2020"],
+    "CUBESAT DEPLOY": ["asat_2021"],
+    "MICROGRAVITY SCIENCE": ["soyuz_ms22_2022"],
+    "SATELLITE LIFE EXTENSION": ["soyuz_ms22_2022"],
+}
+
+
+def aplicar_eventos_iss(objetivo):
+    """Aplica los eventos ISS que amenazan a la mision dada. Se llama al
+    iniciar la partida (POST /api/mission/start)."""
+    obj = _as_str(objetivo).upper()
+    claves = ISS_BY_MISSION.get(obj, [])
+    hoy = _utcnow().strftime("%Y-%m-%d")
+    for clave in claves:
+        ev = ISS_EVENTS.get(clave)
+        if not ev:
+            continue
+        ev_id = "iss:" + clave + ":" + hoy
+        if ev_id in EVENT_STATE:
+            continue
+        EVENT_STATE[ev_id] = {"modules": ev["modules"], "level": ev["level"]}
+        for zona, slug in ev["modules"]:
+            ATTENDED.discard(f"{zona}.{slug}")
+            if STATE["modulos"].get(zona, {}).get(slug) in ("ok", "pre"):
+                _apply_nasa_anomaly(zona, slug, ev["level"], ev["reason"])
+        print(f"[ISS] Evento {clave} ({ev['reason']}) -> {ev['modules']}")
+
+
+# ---------------------------------------------------------------------------
 # Polling periodico de APIs de la NASA
 # ---------------------------------------------------------------------------
 NASA_POLLING_ACTIVE = False
@@ -1201,7 +1284,7 @@ ESCALATION_THREAD = None
 
 
 def escalation_loop():
-    global ESCALATION_ACTIVE
+    global ESCALATION_ACTIVE, MISSION_INTEGRITY
     while ESCALATION_ACTIVE:
         try:
             _escalate_unattended()
@@ -1210,6 +1293,13 @@ def escalation_loop():
             # _drain_pending_anomalies) y no hasta el proximo poll de la
             # NASA (60 s).
             _drain_pending_anomalies()
+            # v20: Mission Integrity — cada modulo en crit sin atender resta
+            # 1 punto por segundo (0.2 pts cada 5 s). En 0, la mision falla.
+            if MISSION["active"] and MISSION["start"]:
+                n_crit = sum(1 for mods in STATE["modulos"].values()
+                             for v in mods.values() if v == "crit")
+                if n_crit > 0:
+                    MISSION_INTEGRITY = max(0, MISSION_INTEGRITY - n_crit * 0.2)
         except Exception as e:
             print(f"[Escalation] Error: {e}")
         time.sleep(5)
@@ -1474,6 +1564,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             MISSION_STATS["repairs"] = 0
             MISSION_STATS["crits"] = 0
             MISSION_STATS["penalties"] = 0
+            MISSION_STATS["drain"] = 0
+            global MISSION_INTEGRITY
+            MISSION_INTEGRITY = 100
             REINFORCED.clear()
             # Reiniciar la partida: limpiar el estado del juego para empezar
             # de cero (dia 1, modulos en ok). Los eventos NASA que sigan
@@ -1501,9 +1594,29 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 except Exception as e:
                     print(f"[mision] Error aplicando eventos al iniciar: {e}")
                 try:
+                    aplicar_eventos_iss(MISSION.get("objetivo"))
+                except Exception as e:
+                    print(f"[mision] Error aplicando eventos ISS al iniciar: {e}")
+                try:
                     broadcast_state()
                 except Exception:
                     pass
+                # v20: avisar a TODOS los clientes que la partida se reinicio,
+                # para que limpien su cache local y muestren la notificacion.
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        _broadcast_async(list(WS_CLIENTS), json.dumps({
+                            "type": "mission_reset",
+                            "data": {
+                                "objetivo": MISSION.get("objetivo"),
+                                "difficulty": MISSION.get("difficulty"),
+                                "days": MISSION.get("days"),
+                                "min_per_day": MISSION.get("min_per_day"),
+                            }
+                        })), WS_LOOP
+                    )
+                except Exception as e:
+                    print(f"[mision] No se pudo broadcast mission_reset: {e}")
             threading.Thread(target=_aplicar_eventos_inicio, daemon=True).start()
             body = json.dumps({"ok": True, "mission": mission_status()}).encode()
             self.send_response(200)

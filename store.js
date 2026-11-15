@@ -192,6 +192,25 @@ function connectWebSocket() {
     WS.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        // v20: otro jugador (o el propio) reinicio la partida. Limpiar cache
+        // local (estados, alertas, zonas vistas) y avisar a las paginas para
+        // que muestren la notificacion y recarguen si hace falta.
+        if (msg.type === "mission_reset") {
+          try {
+            localStorage.removeItem(STORE_KEY);
+            localStorage.removeItem(ALERT_KEY);
+            localStorage.removeItem("station-zones-seen-v1");
+          } catch (e) {
+            console.warn("store: no se pudo limpiar cache al resetear", e);
+          }
+          status = {};
+          loadStatus();
+          saveStatus();
+          window.dispatchEvent(new CustomEvent("station:missionreset", {
+            detail: msg.data || {}
+          }));
+          return;
+        }
         if (msg.type === "state" && msg.data) {
           const s = msg.data;
           if (s.modulos && typeof s.modulos === "object") {
