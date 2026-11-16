@@ -71,7 +71,7 @@ Cada ecuación muestra su fórmula completa, campos numéricos editables, fuente
 Solo las CME dirigidas a la Tierra se consideran amenaza. El filtro verifica `enlilList[].isEarthGB` e `enlilList[].impactList[].location == "Earth"` en DONKI. Las CME que se alejan se ignoran automáticamente.
 
 ### Modo demo (configurable, no automático)
-Un toggle en el panel NASA activa/desactiva "umbralas sensibles para mostrar el mecanismo". El operador lo controla desde la interfaz; no se activa por defecto.
+Un toggle en el panel NASA activa/desactiva "umbrales sensibles para mostrar el mecanismo". El operador lo controla desde la interfaz; no se activa por defecto.
 
 ### Dificultades y modo simple
 - **Fácil:** nave ya diseñada (6/6 sistemas), ocultas métricas/componentes/NASA, menos anomalías.
@@ -83,7 +83,7 @@ Un toggle en el panel NASA activa/desactiva "umbralas sensibles para mostrar el 
 
 ## Validación del sistema
 
-Existe un validador independiente en `/home/albert/validar_xonidu_sistema.py` que:
+Existe un validador independiente que:
 
 - Lee `NASA_API_KEY` desde `db/.env` (solo lectura, no modifica nada del juego).
 - Consulta las mismas URLs de la NASA que el backend.
@@ -102,6 +102,7 @@ Existe un validador independiente en `/home/albert/validar_xonidu_sistema.py` qu
 - **Puerto HTTP:** 5000 (detrás de Nginx en 80/443).
 - **SSL:** Certbot con renovación automática.
 - **No se usa túnel:** acceso directo por IP pública.
+- **Firewall:** ufw, solo SSH (22), HTTP (80) y HTTPS (443) abiertos.
 
 ---
 
@@ -137,10 +138,7 @@ station_xonidu/
 ## Comandos útiles
 
 - Iniciar backend: `python3 station-backend.py`
-- Ejecutar validador: `python3 /home/albert/validar_xonidu_sistema.py`
-- Forzar escaneo de seguridad: `sudo systemctl start security-scan.service`
-- Ver logs del backend: `journalctl -u security-scan.service -f`
-- Enviar email: `echo "msg" | msmtp -a default xonidu@gmail.com`
+- Ejecutar validador: `python3 validar_xonidu_sistema.py`
 
 ---
 
@@ -151,10 +149,3 @@ station_xonidu/
 | Demo | $6–12 | 20–30 | Aula pequeña, demostración |
 | Producción | $31–36 | 50–100 | Operación estándar |
 | Escala | $50–80 | 100+ | Despliegue masivo |
-
----
-
-## Créditos
-
-Usuario: jefe  
-Contacto: xonidu@gmail.com (vía msmtp, deireanz@gmail.com → xonidu@gmail.com)
