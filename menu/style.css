@@ -209,17 +209,26 @@ body{display:grid;place-items:center;overflow:hidden}
 .nasa-panel{color:var(--text);line-height:1.6}
 .nasa-sub{font-size:13px;color:var(--muted);margin:6px 0 12px}
 .nasa-sources{display:flex;flex-direction:column;gap:8px;margin:10px 0}
-.nasa-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
-  padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:rgba(26,37,64,.4)}
-.nasa-label{color:#e8eefc;font-size:13px;flex:0 0 34%}
-.nasa-value{font-size:14px;font-weight:800;color:var(--cyan);flex:0 0 20%;text-align:right;font-variant-numeric:tabular-nums}
+.nasa-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:2px 12px;align-items:center;
+  padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:rgba(26,37,64,.4)}
+.nasa-label{grid-column:1;color:#e8eefc;font-size:13px;min-width:0;overflow-wrap:anywhere}
+.nasa-value{grid-column:2;font-size:14px;font-weight:800;color:var(--cyan);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 .nasa-value.nasa-ok{color:#2ecc71}
 .nasa-value.nasa-sindatos{color:#93a1bf;font-weight:400}
-.nasa-source{font-size:11px;color:#5b8a99;flex:1}
-.nasa-time{font-size:11px;color:#5b8a99;flex:0 0 22%}
-.nasa-status{font-size:11px;font-weight:700;flex:0 0 14%;text-align:center}
+.nasa-status{grid-column:3;font-size:11px;font-weight:700;white-space:nowrap;text-align:right;min-width:64px}
 .nasa-status.nasa-ok{color:#2ecc71}
 .nasa-status.nasa-sindatos{color:#e74c3c}
+.nasa-source{grid-column:1;font-size:11px;color:#5b8a99;min-width:0;overflow-wrap:anywhere}
+.nasa-time{grid-column:2 / 4;font-size:11px;color:#5b8a99;text-align:right;min-width:0;overflow-wrap:anywhere}
+.nasa-hint{font-size:12px;color:#c9a227;margin:6px 2px 0}
+.nasa-updated{font-size:11px;color:var(--muted);margin:6px 2px 0;text-align:right}
+@media(max-width:520px){
+  .nasa-row{grid-template-columns:minmax(0,1fr) auto}
+  .nasa-status{grid-column:2}
+  .nasa-value{grid-column:1;text-align:left}
+  .nasa-label{grid-column:1 / 3}
+  .nasa-source,.nasa-time{grid-column:1 / 3;text-align:left}
+}
 .nasa-demo{margin:8px 0;padding:8px 10px;border:1px solid #f1c40f;border-radius:8px;
   background:rgba(241,196,15,.08);color:#f1c40f;font-size:12px;font-weight:700}
 .nasa-refs{margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}

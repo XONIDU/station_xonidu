@@ -381,6 +381,9 @@ const STRINGS = {
     nasaDemoToggle: "Modo demo: umbrales sensibles",
     nasaDemoOn: "Activado",
     nasaDemoOff: "Desactivado",
+    nasaUpdated: "Actualizado",
+    nasaRefsTitle: "Referencias científicas:",
+    nasaNoDataHint: "Sin datos ahora mismo: la NASA no ha publicado un evento reciente de este tipo (o el backend aún no lo ha consultado).",
     nasaDemoSub: "Solo para mostrar el mecanismo en la presentación. No afecta los datos reales de la NASA.",
     eqTitle: "Ecuaciones de Integración NASA — todas visibles y editables",
     eqSub: "Cada regla usa un umbral configurable del panel. Los valores se guardan en el backend (game_config.json) y se aplican en el siguiente poll de la NASA (cada 60 s).",
@@ -561,6 +564,9 @@ const STRINGS = {
     nasaDemoToggle: "Demo mode: sensitive thresholds",
     nasaDemoOn: "On",
     nasaDemoOff: "Off",
+    nasaUpdated: "Updated",
+    nasaRefsTitle: "Scientific references:",
+    nasaNoDataHint: "No data right now: NASA has not published a recent event of this kind (or the backend has not queried it yet).",
     nasaDemoSub: "For showing the mechanism in the presentation. Does not affect real NASA data.",
     eqTitle: "NASA Integration Equations — all visible and editable",
     eqSub: "Each rule uses a configurable threshold from this panel. Values are saved to the backend (game_config.json) and apply on the next NASA poll (every 60 s).",
@@ -1496,7 +1502,7 @@ function renderNasa() {
     demoHtml +
     '<div id="nasa-sources" class="nasa-sources">' + t("metricsLive") + '</div>' +
     '<div class="nasa-refs">' +
-    '<p><b>Referencias científicas:</b> ' +
+    '<p><b>' + esc(t("nasaRefsTitle")) + '</b> ' +
     esc(t("nasaRefKp")) + ' · ' + esc(t("nasaRefFlr")) + ' · ' +
     esc(t("nasaRefWind")) + ' · ' + esc(t("nasaRefMag")) + ' · ' +
     esc(t("nasaRefCme")) +
@@ -1508,6 +1514,24 @@ function renderNasa() {
     try { localStorage.setItem(CONFIG_KEY, JSON.stringify(CFG)); } catch (e) {}
     renderNasa();
   });
+  loadNasaSources();
+  // Se refresca solo mientras el panel esta abierto (antes se leia UNA vez y,
+  // si el poll de la NASA aun no terminaba, los datos quedaban vacios).
+  clearInterval(renderNasa._timer);
+  renderNasa._timer = setInterval(() => {
+    if (location.hash.slice(1) !== "nasa" || $("#detail").hidden) { clearInterval(renderNasa._timer); return; }
+    loadNasaSources();
+  }, 20000);
+}
+
+// Valor de una fuente NASA: numeros con su unidad; texto (p. ej. la clase de
+// llamarada "M1.2") tal cual. Antes todo pasaba por Number() y "M1.2" salia "NaN".
+function nasaFormat(v, unit) {
+  const isNum = typeof v === "number" || (typeof v === "string" && v.trim() !== "" && !isNaN(Number(v)));
+  return isNum ? esc(String(Number(v))) + esc(unit || "") : esc(String(v));
+}
+
+function loadNasaSources() {
   const sources = [
     { key: "kp", label: t("nasaLabelKp"), source: t("nasaSourceKp"), timeKey: "kp_time", unit: "" },
     { key: "cme_speed", label: t("nasaLabelCme"), source: t("nasaSourceCme"), timeKey: "cme_time", unit: " km/s" },
@@ -1524,24 +1548,26 @@ function renderNasa() {
       sb.innerHTML = '<p class="muted">' + t("nasaUnavailable") + '</p>';
       return;
     }
-    sb.innerHTML = sources.map(s => {
-      const v = data[s.key] !== null && data[s.key] !== undefined ? data[s.key] : null;
-      const ok = v !== null;
+    let anyMissing = false;
+    const rows = sources.map(s => {
+      const raw = data[s.key];
+      const ok = raw !== null && raw !== undefined && raw !== "";
+      if (!ok) anyMissing = true;
       const status = ok ? t("nasaOk") : t("nasaSinDatos");
       const cls = ok ? "nasa-ok" : "nasa-sindatos";
-      const val = ok ? esc(Number(v).toString()) + esc(s.unit) : "—";
+      const val = ok ? nasaFormat(raw, s.unit) : "—";
       const time = data[s.timeKey] ? esc(data[s.timeKey]) : "—";
       return '<div class="nasa-row">' +
         '<span class="nasa-label">' + esc(s.label) + '</span>' +
         '<span class="nasa-value ' + cls + '">' + val + '</span>' +
+        '<span class="nasa-status ' + cls + '">' + esc(status) + '</span>' +
         '<span class="nasa-source">' + esc(s.source) + '</span>' +
         '<span class="nasa-time">' + t("nasaTime").replace("{time}", time) + '</span>' +
-        '<span class="nasa-status ' + cls + '">' + status + '</span>' +
         '</div>';
     }).join("");
-  }).catch(() => {
-    const sb = document.getElementById("nasa-sources");
-    if (sb) sb.innerHTML = '<p class="muted">' + t("nasaUnavailable") + '</p>';
+    sb.innerHTML = rows
+      + (anyMissing ? '<p class="nasa-hint">' + esc(t("nasaNoDataHint")) + '</p>' : '')
+      + '<p class="nasa-updated">' + esc(t("nasaUpdated")) + ': ' + new Date().toLocaleTimeString() + '</p>';
   });
 }
 
@@ -1592,11 +1618,15 @@ $("#compTopBtn").addEventListener("click", () => { location.hash = "components";
 // poll manual para que los datos esten frescos al abrir.
 $("#refreshTopBtn").addEventListener("click", () => {
   showToast(t("refreshPolling"));
+  location.hash = "nasa";
   fetch("/api/nasa/poll", { method: "POST" })
     .then(r => r.ok ? r.json() : null)
-    .then(d => { showToast(d && d.ok ? t("refreshOk") : t("refreshFail")); })
+    .then(d => {
+      showToast(d && d.ok ? t("refreshOk") : t("refreshFail"));
+      // El poll tarda: al terminar se vuelven a leer los datos del panel.
+      if (location.hash.slice(1) === "nasa") loadNasaSources();
+    })
     .catch(() => { showToast(t("refreshFail")); });
-  location.hash = "nasa";
 });
 document.addEventListener("keydown", e => { if (e.key === "Escape") location.hash = ""; });
 
