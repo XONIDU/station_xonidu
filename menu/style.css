@@ -204,3 +204,41 @@ body{display:grid;place-items:center;overflow:hidden}
 .stage.plates .btn:hover,.stage.plates .btn:focus-visible{background:#2f3d57;border-color:rgba(127,243,255,.95)}
 .stage.plates .btn:active{background:#3a4c6b}
 .stage.plates.debug .btn{border-color:rgba(255,0,0,.8)}
+
+/* ---------- Panel Datos NASA ---------- */
+.nasa-panel{color:var(--text);line-height:1.6}
+.nasa-sub{font-size:13px;color:var(--muted);margin:6px 0 12px}
+.nasa-sources{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.nasa-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:rgba(26,37,64,.4)}
+.nasa-label{color:#e8eefc;font-size:13px;flex:0 0 34%}
+.nasa-value{font-size:14px;font-weight:800;color:var(--cyan);flex:0 0 20%;text-align:right;font-variant-numeric:tabular-nums}
+.nasa-value.nasa-ok{color:#2ecc71}
+.nasa-value.nasa-sindatos{color:#93a1bf;font-weight:400}
+.nasa-source{font-size:11px;color:#5b8a99;flex:1}
+.nasa-time{font-size:11px;color:#5b8a99;flex:0 0 22%}
+.nasa-status{font-size:11px;font-weight:700;flex:0 0 14%;text-align:center}
+.nasa-status.nasa-ok{color:#2ecc71}
+.nasa-status.nasa-sindatos{color:#e74c3c}
+.nasa-demo{margin:8px 0;padding:8px 10px;border:1px solid #f1c40f;border-radius:8px;
+  background:rgba(241,196,15,.08);color:#f1c40f;font-size:12px;font-weight:700}
+.nasa-refs{margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}
+.nasa-refs p{font-size:11px;color:var(--muted);margin:4px 0}
+.nasa-toggle{margin:10px 0;padding:10px;border:1px solid var(--line);border-radius:8px;background:rgba(26,37,64,.4);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.nasa-toggle-label{font-size:13px;font-weight:700;color:#e8eefc}
+.nasa-toggle-btn{font:inherit;font-size:12px;font-weight:700;padding:6px 12px;border-radius:6px;border:1px solid var(--line);background:#1a2540;color:#dff6ff;cursor:pointer}
+.nasa-toggle-btn:hover{border-color:#00e5ff;background:#16414f}
+.nasa-toggle-btn.nasa-toggle-on{border-color:#2ecc71;background:rgba(46,204,113,.15);color:#2ecc71}
+.nasa-demo-sub{font-size:11px;color:var(--muted);margin:4px 0 0}
+
+/* ---------- Ecuaciones NASA editables ---------- */
+.eq-block{margin:12px 0;padding:10px;border:1px solid var(--line);border-radius:8px;background:rgba(26,37,64,.4)}
+.eq-row h4{margin:0 0 6px;font-size:14px;color:#7ff3ff}
+.eq-formula{font-size:13px;color:#e8eefc;margin:4px 0;font-family:ui-monospace,Consolas,monospace}
+.eq-inputs{margin:6px 0;display:flex;flex-wrap:wrap;gap:12px}
+.eq-field{display:flex;align-items:center;gap:6px;font-size:12px;color:#c7d3ea}
+.eq-field input{width:70px;padding:4px;border:1px solid var(--line);border-radius:4px;background:#0d1626;color:#dff6ff;font:inherit}
+.eq-field input:focus{border-color:#00e5ff;outline:none}
+.eq-field em{font-size:11px;color:#5b8a99;font-style:normal;margin-left:4px}
+.eq-source{font-size:11px;color:#5b8a99;margin:4px 0}
+.eq-affects{font-size:11px;color:#9fb7d6;margin:2px 0 0}

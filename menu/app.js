@@ -169,10 +169,21 @@ const DIFFICULTY_PRESETS = {
   dificil: { days: 5, min_per_day: 3, kp_warn: 5, kp_crit: 7, cme_speed_warn: 450, flr_min_class: "M", attend_window_sec: 60, event_fresh_hours: 120, max_anomalies: 2 }
 };
 let difficulty = "medio";
+let SIMPLE_MODE = false;
+function setSimpleMode() {
+  SIMPLE_MODE = difficulty === "facil";
+  try {
+    const m = $("#metricsTopBtn"); if (m) m.style.display = SIMPLE_MODE ? "none" : "";
+    const c = $("#compTopBtn"); if (c) c.style.display = SIMPLE_MODE ? "none" : "";
+    const r = $("#refreshTopBtn"); if (r) r.style.display = SIMPLE_MODE ? "none" : "";
+    const h = $("#hud"); if (h) h.style.display = SIMPLE_MODE ? "none" : "";
+  } catch (e) {}
+}
 try {
   const saved = localStorage.getItem(DIFFICULTY_KEY);
   if (saved && DIFFICULTY_PRESETS[saved]) difficulty = saved;
 } catch (e) { /* primera partida */ }
+setSimpleMode();
 function difficultyName() {
   return t(difficulty === "facil" ? "difficultyEasy" : difficulty === "medio" ? "difficultyMedium" : "difficultyHard");
 }
@@ -187,7 +198,13 @@ const DEFAULT_CONFIG = {
   score_base: 100, orbit_fit: 20, orbit_miss: -15,
   launcher_fit: 10, launcher_miss: -10,
   mass_penalty: -20, budget_penalty: -10, budget_cap: 500,
-  complete_bonus: 200, complete_bonus_hard: 300, data_bonus: 40
+  complete_bonus: 200, complete_bonus_hard: 300, data_bonus: 40,
+  demo_mode: false,
+  flr_min_class: "M",
+  dsn_min_active: 1,
+  cme_fast_speed: 600,
+  wind_speed_warn: 600,
+  mag_bt_warn: 10
 };
 let CFG = Object.assign({}, DEFAULT_CONFIG);
 try {
@@ -201,6 +218,7 @@ fetch("/api/config").then(r => r.ok ? r.json() : null).then(d => {
     if (d.config.difficulty && DIFFICULTY_PRESETS[d.config.difficulty]) {
       difficulty = d.config.difficulty;
       missionDays = DIFFICULTY_PRESETS[difficulty].days;
+      setSimpleMode();
     }
     syncHud();
   }
@@ -337,7 +355,67 @@ const STRINGS = {
     toastReset: "Otro jugador reinició la partida",
     bannerSub: "Juego de diseño de misión espacial",
     ariaLang: "Cambiar idioma",
-    ariaMenu: "Menú principal"
+    ariaMenu: "Menú principal",
+    nasaTitle: "Datos NASA en vivo",
+    nasaSub: "Fuentes reales de la NASA y NOAA. Los valores se leen del backend (station-backend.py), nunca se inventan.",
+    nasaLabelKp: "Índice Kp (geomagnetismo)",
+    nasaLabelCme: "Velocidad CME (hacia la Tierra)",
+    nasaLabelFlr: "Última llamarada solar",
+    nasaLabelWind: "Viento solar (protones)",
+    nasaLabelMag: "Campo magnético Bt",
+    nasaSourceKp: "SWPC/NOAA — K-index geomagnético",
+    nasaSourceCme: "DONKI/NASA — CME dirigida a la Tierra",
+    nasaSourceFlr: "DONKI/NASA — Llamarada solar",
+    nasaSourceWind: "DONKI/NASA — Viento solar",
+    nasaSourceMag: "DONKI/NASA — Campo magnético",
+    nasaOk: "OK",
+    nasaSinDatos: "SIN DATOS",
+    nasaTime: "Consulta: {time}",
+    nasaUnavailable: "Backend de la NASA no disponible.",
+    nasaDemo: "Modo demo: umbrales sensibles para mostrar el mecanismo",
+    nasaRefKp: "Kp ≥ 5 = tormenta G1 (NOAA SWPC)",
+    nasaRefFlr: "Llamarada clase M = nivel R1 (NOAA SWPC)",
+    nasaRefWind: "Viento solar > 600 km/s",
+    nasaRefMag: "Campo Bt > 10 nT",
+    nasaRefCme: "CME > 450 km/s hacia la Tierra",
+    nasaDemoToggle: "Modo demo: umbrales sensibles",
+    nasaDemoOn: "Activado",
+    nasaDemoOff: "Desactivado",
+    nasaDemoSub: "Solo para mostrar el mecanismo en la presentación. No afecta los datos reales de la NASA.",
+    eqTitle: "Ecuaciones de Integración NASA — todas visibles y editables",
+    eqSub: "Cada regla usa un umbral configurable del panel. Los valores se guardan en el backend (game_config.json) y se aplican en el siguiente poll de la NASA (cada 60 s).",
+    eqKpTitle: "1. Radiación — Índice Kp geomagnético (SWPC/NOAA)",
+    eqKpFormula: "si Kp ≥ kp_warn → módulos de radiación a WARN; si Kp ≥ kp_crit → a CRIT",
+    eqKpSource: "Fuente: NOAA SWPC Planetary K-index. Kp ≥ 5 = tormenta geomagnética G1.",
+    eqKpAffects: "Afecta: módulos de radiación.",
+    eqFlrTitle: "2. Tormenta Solar — Llamarada (DONKI/NASA FLR)",
+    eqFlrFormula: "si clase de llamarada ≥ flr_min_class (M o X) → degrada comunicaciones y salud en EVA",
+    eqFlrSource: "Fuente: DONKI/NASA Solar Flare. Llamarada clase M = nivel R1 (radio blackout).",
+    eqFlrAffects: "Afecta: módulos de comunicaciones y EVA.",
+    eqCmeTitle: "3. Eyección de Masa Coronal — CME (DONKI/NASA)",
+    eqCmeFormula: "si CME dirigida a la Tierra y velocidad ≥ cme_speed_warn → reduce energía de paneles solares; si ≥ cme_fast_speed → crítico",
+    eqCmeSource: "Fuente: DONKI/NASA CME. Solo CMEs dirigidas a la Tierra (filtro Earth-direction activo).",
+    eqCmeAffects: "Afecta: módulos de energía y paneles solares.",
+    eqWindTitle: "4. Viento Solar — DSCOVR/SWPC",
+    eqWindFormula: "si velocidad del viento solar ≥ wind_speed_warn → degrada módulos de energía y térmico",
+    eqWindSource: "Fuente: DSCOVR/SWPC viento solar en tiempo real. > 600 km/s = alta velocidad.",
+    eqWindAffects: "Afecta: módulos de energía y control térmico.",
+    eqMagTitle: "5. Campo Magnético Bt — DSCOVR/SWPC",
+    eqMagFormula: "si Bt ≥ mag_bt_warn → degrada módulo de control térmico",
+    eqMagSource: "Fuente: DSCOVR/SWPC campo magnético. Bt > 10 nT = campo elevado.",
+    eqMagAffects: "Afecta: módulo de control térmico.",
+    eqNeoTitle: "6. Asteroides Cercanos — NASA NeoWs",
+    eqNeoFormula: "si hay NEOs potencialmente peligrosos cerca → alerta en navegación y estructura",
+    eqNeoSource: "Fuente: NASA NeoWs (Near-Earth Objects).",
+    eqNeoAffects: "Afecta: módulos de navegación y estructura.",
+    eqDsnTitle: "7. Red de Espacio Profundo — NASA DSN",
+    eqDsnFormula: "si platos DSN activos < dsn_min_active → degrada comunicaciones",
+    eqDsnSource: "Fuente: NASA DSN (Deep Space Network).",
+    eqDsnAffects: "Afecta: módulos de comunicaciones.",
+    eqEscalateTitle: "8. Escalado de Fallos — regla del juego",
+    eqEscalateFormula: "si un módulo está en WARN sin atender durante attend_window_sec → escala a CRIT",
+    eqEscalateSource: "Fuente: regla interna del juego (no hay dato de la NASA).",
+    eqEscalateAffects: "Afecta: todos los módulos con estado WARN.",
   },
   en: {
     appTitle: "XONIDU Station — Space Mission Design Game",
@@ -457,7 +535,67 @@ const STRINGS = {
     toastReset: "Another player restarted the game",
     bannerSub: "Space Mission Design Game",
     ariaLang: "Change language",
-    ariaMenu: "Main menu"
+    ariaMenu: "Main menu",
+    nasaTitle: "Live NASA Data",
+    nasaSub: "Real sources from NASA and NOAA. Values are read from the backend (station-backend.py), never invented.",
+    nasaLabelKp: "Kp index (geomagnetism)",
+    nasaLabelCme: "CME speed (Earth-directed)",
+    nasaLabelFlr: "Last solar flare",
+    nasaLabelWind: "Solar wind (protons)",
+    nasaLabelMag: "Magnetic field Bt",
+    nasaSourceKp: "SWPC/NOAA — Geomagnetic K-index",
+    nasaSourceCme: "DONKI/NASA — Earth-directed CME",
+    nasaSourceFlr: "DONKI/NASA — Solar flare",
+    nasaSourceWind: "DONKI/NASA — Solar wind",
+    nasaSourceMag: "DONKI/NASA — Magnetic field",
+    nasaOk: "OK",
+    nasaSinDatos: "NO DATA",
+    nasaTime: "Queried: {time}",
+    nasaUnavailable: "NASA backend not available.",
+    nasaDemo: "Demo mode: sensitive thresholds to show the mechanism",
+    nasaRefKp: "Kp ≥ 5 = G1 storm (NOAA SWPC)",
+    nasaRefFlr: "M-class flare = R1 level (NOAA SWPC)",
+    nasaRefWind: "Solar wind > 600 km/s",
+    nasaRefMag: "Bt field > 10 nT",
+    nasaRefCme: "CME > 450 km/s toward Earth",
+    nasaDemoToggle: "Demo mode: sensitive thresholds",
+    nasaDemoOn: "On",
+    nasaDemoOff: "Off",
+    nasaDemoSub: "For showing the mechanism in the presentation. Does not affect real NASA data.",
+    eqTitle: "NASA Integration Equations — all visible and editable",
+    eqSub: "Each rule uses a configurable threshold from this panel. Values are saved to the backend (game_config.json) and apply on the next NASA poll (every 60 s).",
+    eqKpTitle: "1. Radiation — Geomagnetic Kp Index (SWPC/NOAA)",
+    eqKpFormula: "if Kp ≥ kp_warn → radiation modules to WARN; if Kp ≥ kp_crit → to CRIT",
+    eqKpSource: "Source: NOAA SWPC Planetary K-index. Kp ≥ 5 = G1 geomagnetic storm.",
+    eqKpAffects: "Affects: radiation modules.",
+    eqFlrTitle: "2. Solar Storm — Solar Flare (DONKI/NASA FLR)",
+    eqFlrFormula: "if flare class ≥ flr_min_class (M or X) → degrades communications and EVA health",
+    eqFlrSource: "Source: DONKI/NASA Solar Flare. M-class flare = R1 level (radio blackout).",
+    eqFlrAffects: "Affects: communications and EVA modules.",
+    eqCmeTitle: "3. Coronal Mass Ejection — CME (DONKI/NASA)",
+    eqCmeFormula: "if Earth-directed CME and speed ≥ cme_speed_warn → reduces solar panel power; if ≥ cme_fast_speed → critical",
+    eqCmeSource: "Source: DONKI/NASA CME. Only Earth-directed CMEs (Earth-direction filter active).",
+    eqCmeAffects: "Affects: power modules and solar panels.",
+    eqWindTitle: "4. Solar Wind — DSCOVR/SWPC",
+    eqWindFormula: "if solar wind speed ≥ wind_speed_warn → degrades power and thermal modules",
+    eqWindSource: "Source: DSCOVR/SWPC real-time solar wind. > 600 km/s = high speed.",
+    eqWindAffects: "Affects: power and thermal control modules.",
+    eqMagTitle: "5. Magnetic Field Bt — DSCOVR/SWPC",
+    eqMagFormula: "if Bt ≥ mag_bt_warn → degrades thermal control module",
+    eqMagSource: "Source: DSCOVR/SWPC magnetic field. Bt > 10 nT = elevated field.",
+    eqMagAffects: "Affects: thermal control module.",
+    eqNeoTitle: "6. Near-Earth Objects — NASA NeoWs",
+    eqNeoFormula: "if potentially hazardous NEOs near Earth → alert in navigation and structure",
+    eqNeoSource: "Source: NASA NeoWs (Near-Earth Objects).",
+    eqNeoAffects: "Affects: navigation and structure modules.",
+    eqDsnTitle: "7. Deep Space Network — NASA DSN",
+    eqDsnFormula: "if active DSN dishes < dsn_min_active → degrades communications",
+    eqDsnSource: "Source: NASA DSN (Deep Space Network).",
+    eqDsnAffects: "Affects: communications modules.",
+    eqEscalateTitle: "8. Failure Escalation — game rule",
+    eqEscalateFormula: "if a module stays in WARN unattended for attend_window_sec → escalates to CRIT",
+    eqEscalateSource: "Source: internal game rule (no NASA data).",
+    eqEscalateAffects: "Affects: all modules in WARN state.",
   }
 };
 
@@ -470,6 +608,7 @@ function tf(key, vars) {
 }
 // L(es, en): devuelve el texto en el idioma activo (para frases con numeros).
 function L(es, en) { return LANG === "es" ? es : en; }
+function esc(s) { if (s == null) return ""; return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]); }
 
 /* ---- Nombres y descripciones traducibles ----
    Los id en ingles (SATELLITE REPAIR, LEO, FALCON 9, MEDIUM BUS...) NO se
@@ -882,6 +1021,7 @@ function renderDifficulty() {
 function applyDifficulty(key) {
   if (!DIFFICULTY_PRESETS[key]) return;
   difficulty = key;
+  setSimpleMode();
   const p = DIFFICULTY_PRESETS[key];
   missionDays = p.days;
   // v15: la dificultad trae sus componentes por defecto (facil = todos,
@@ -920,6 +1060,7 @@ function applyDifficulty(key) {
     .catch(() => {
       const msg = $("#diffMsg");
       if (msg) msg.textContent = t("difficultySavedLocal");
+      setSimpleMode();
       syncHud(); route();
     });
 }
@@ -930,7 +1071,9 @@ const metricsBtn = document.createElement("button");
 metricsBtn.type = "button"; metricsBtn.id = "metricsBtn";
 metricsBtn.textContent = t("btnMetrics");
 metricsBtn.addEventListener("click", () => { location.hash = "metrics"; });
-document.querySelector("#detail .card").appendChild(metricsBtn);
+if (!SIMPLE_MODE) {
+	  document.querySelector("#detail .card").appendChild(metricsBtn);
+	}
 
 /* ============ PANELES ============ */
 function ensureStyles() {
@@ -1154,6 +1297,9 @@ const CONFIG_FIELDS = [
   { key:"kp_warn", label:"Kp warn — tormenta geomagnética (radiación warn)", labelEn:"Kp warn — geomagnetic storm (radiation warn)", unit:"Kp" },
   { key:"kp_crit", label:"Kp crit — tormenta fuerte (radiación crit)", labelEn:"Kp crit — strong storm (radiation crit)", unit:"Kp" },
   { key:"cme_speed_warn", label:"CME rápida — velocidad mínima para alerta de energía", labelEn:"Fast CME — minimum speed for power alert", unit:"km/s" },
+  { key:"cme_fast_speed", label:"CME muy rápida — velocidad crítica hacia la Tierra", labelEn:"Very fast CME — critical speed toward Earth", unit:"km/s" },
+  { key:"wind_speed_warn", label:"Viento solar — velocidad umbral de alerta", labelEn:"Solar wind — alert speed threshold", unit:"km/s" },
+  { key:"mag_bt_warn", label:"Campo magnético Bt — umbral de alerta", labelEn:"Magnetic field Bt — alert threshold", unit:"nT" },
   { key:"event_fresh_hours", label:"Antigüedad máxima de un evento FLR/CME para aplicarlo", labelEn:"Maximum age of a FLR/CME event to apply", unit:"h" },
   { key:"attend_window_sec", label:"Segundos en warn (amarillo) sin atender antes de escalar a crit (rojo)", labelEn:"Seconds in warn (yellow) unattended before escalating to crit (red)", unit:"s" },
   { key:"max_anomalies", label:"Anomalías a la vez (las demás quedan en cola y salen solas)", labelEn:"Anomalies at once (the rest queue up and come out on their own)", unit:"" },
@@ -1167,7 +1313,12 @@ const CONFIG_FIELDS = [
   { key:"budget_penalty", label:"Penalización por pasar el tope de presupuesto", labelEn:"Penalty for exceeding the budget cap", unit:"pts" },
   { key:"complete_bonus", label:"Bonus al completar la misión", labelEn:"Bonus for completing the mission", unit:"pts" },
   { key:"complete_bonus_hard", label:"Bonus al completar la misión 7 (la más difícil)", labelEn:"Bonus for completing mission 7 (hardest)", unit:"pts" },
-  { key:"data_bonus", label:"DATA que generan las misiones 4, 5, 6 y 9", labelEn:"DATA generated by missions 4, 5, 6 and 9", unit:"mb" }
+  { key:"data_bonus", label:"DATA que generan las misiones 4, 5, 6 y 9", labelEn:"DATA generated by missions 4, 5, 6 and 9", unit:"mb" },
+  { key:"flr_min_class", label:"Clase mínima de llamarada para alerta", labelEn:"Minimum flare class for alert", unit:"clase" },
+  { key:"dsn_min_active", label:"Platos DSN activos mínimos para comunicaciones", labelEn:"Minimum active DSN dishes for comms", unit:"platos" },
+  { key:"cme_fast_speed", label:"CME muy rápida — velocidad crítica hacia la Tierra", labelEn:"Very fast CME — critical speed toward Earth", unit:"km/s" },
+  { key:"wind_speed_warn", label:"Viento solar — velocidad umbral de alerta", labelEn:"Solar wind — alert speed threshold", unit:"km/s" },
+  { key:"mag_bt_warn", label:"Campo magnético Bt — umbral de alerta", labelEn:"Magnetic field Bt — alert threshold", unit:"nT" }
 ];
 
 function configFieldLabel(f) { return LANG === "en" && f.labelEn ? f.labelEn : f.label; }
@@ -1221,7 +1372,54 @@ function renderMetrics() {
     div.innerHTML = compHtml;
     msConfig.parentNode.insertBefore(div, msConfig);
   }
+
+  // ---- Sección: Ecuaciones de Integración NASA, todas visibles y editables ----
+  const eqHtml = '<h3 class="ms-h">' + t("eqTitle") + '</h3>'
+    + '<p class="ms-sub">' + t("eqSub") + '</p>'
+    + '<div class="eq-block">' + eqRow("eqKpTitle", "eqKpFormula", "eqKpSource", "eqKpAffects", ["kp_warn","kp_crit"], ["Kp","Kp"]) + '</div>'
+    + '<div class="eq-block">' + eqRow("eqFlrTitle", "eqFlrFormula", "eqFlrSource", "eqFlrAffects", ["flr_min_class"], ["clase"]) + '</div>'
+    + '<div class="eq-block">' + eqRow("eqCmeTitle", "eqCmeFormula", "eqCmeSource", "eqCmeAffects", ["cme_speed_warn","cme_fast_speed"], ["km/s","km/s"]) + '</div>'
+    + '<div class="eq-block">' + eqRow("eqWindTitle", "eqWindFormula", "eqWindSource", "eqWindAffects", ["wind_speed_warn"], ["km/s"]) + '</div>'
+    + '<div class="eq-block">' + eqRow("eqMagTitle", "eqMagFormula", "eqMagSource", "eqMagAffects", ["mag_bt_warn"], ["nT"]) + '</div>'
+    + '<div class="eq-block">' + eqRow("eqNeoTitle", "eqNeoFormula", "eqNeoSource", "eqNeoAffects", [], []) + '</div>'
+    + '<div class="eq-block">' + eqRow("eqDsnTitle", "eqDsnFormula", "eqDsnSource", "eqDsnAffects", ["dsn_min_active"], ["platos"]) + '</div>'
+    + '<div class="eq-block">' + eqRow("eqEscalateTitle", "eqEscalateFormula", "eqEscalateSource", "eqEscalateAffects", ["attend_window_sec"], ["s"]) + '</div>'
+    + '</div>';
+  const eqDiv = document.createElement("div");
+  eqDiv.innerHTML = eqHtml;
+  box.appendChild(eqDiv);
+
+  // Sincronizar inputs de ecuaciones con CFG
+  eqDiv.querySelectorAll("input[data-eq]").forEach(inp => {
+    inp.addEventListener("input", () => {
+      const v = Number(inp.value);
+      const key = inp.dataset.eq;
+      if (key in DEFAULT_CONFIG && !isNaN(v)) {
+        CFG[key] = v;
+        eqDiv.querySelectorAll('input[data-eq="' + key + '"]').forEach(o => { if (o !== inp) o.value = inp.value; });
+      }
+    });
+  });
+
   fetchLiveData();
+}
+
+function eqRow(titleKey, formulaKey, sourceKey, affectKey, cfgKeys, units) {
+  let inputs = "";
+  cfgKeys.forEach(function (k, i) {
+    const unit = units[i] || "";
+    inputs += '<label class="eq-field"><span>' + esc(k) + ':</span> '
+      + '<input type="number" data-eq="' + k + '" value="' + (CFG[k] != null ? CFG[k] : "") + '">'
+      + '<em>' + esc(unit) + '</em></label> ';
+  });
+  if (!inputs) inputs = '<span class="muted">sin umbral numérico (regla de presencia)</span>';
+  return '<div class="eq-row">'
+    + '<h4>' + esc(t(titleKey)) + '</h4>'
+    + '<p class="eq-formula">' + esc(t(formulaKey)) + '</p>'
+    + '<div class="eq-inputs">' + inputs + '</div>'
+    + '<p class="eq-source">' + esc(t(sourceKey)) + '</p>'
+    + '<p class="eq-affects">' + esc(t(affectKey)) + '</p>'
+    + '</div>';
 }
 
 function saveConfig() {
@@ -1277,22 +1475,101 @@ function fetchLiveData() {
     });
 }
 
+/* Panel de datos NASA: 5 fuentes con valor, hora y estado OK / SIN DATOS. */
+function renderNasa() {
+  $("#dTitle").textContent = t("nasaTitle");
+  const box = $("#dText");
+  const demoHtml = (CFG && CFG.demo_mode)
+    ? '<div class="nasa-demo">' + esc(t("nasaDemo")) + '</div>'
+    : '';
+  const demoOn = !!(CFG && CFG.demo_mode);
+  box.innerHTML =
+    '<div class="nasa-panel">' +
+    '<p class="nasa-sub">' + esc(t("nasaSub")) + '</p>' +
+    '<div class="nasa-toggle">' +
+    '<label class="nasa-toggle-label">' + esc(t("nasaDemoToggle")) + '</label>' +
+    '<button type="button" id="nasa-demo-toggle" class="nasa-toggle-btn ' + (demoOn ? 'nasa-toggle-on' : '') + '">' +
+    esc(demoOn ? t("nasaDemoOn") : t("nasaDemoOff")) +
+    '</button>' +
+    '<p class="nasa-demo-sub">' + esc(t("nasaDemoSub")) + '</p>' +
+    '</div>' +
+    demoHtml +
+    '<div id="nasa-sources" class="nasa-sources">' + t("metricsLive") + '</div>' +
+    '<div class="nasa-refs">' +
+    '<p><b>Referencias científicas:</b> ' +
+    esc(t("nasaRefKp")) + ' · ' + esc(t("nasaRefFlr")) + ' · ' +
+    esc(t("nasaRefWind")) + ' · ' + esc(t("nasaRefMag")) + ' · ' +
+    esc(t("nasaRefCme")) +
+    '</p>' +
+    '</div>' +
+    '</div>';
+  document.getElementById("nasa-demo-toggle").addEventListener("click", function () {
+    CFG.demo_mode = !CFG.demo_mode;
+    try { localStorage.setItem(CONFIG_KEY, JSON.stringify(CFG)); } catch (e) {}
+    renderNasa();
+  });
+  const sources = [
+    { key: "kp", label: t("nasaLabelKp"), source: t("nasaSourceKp"), timeKey: "kp_time", unit: "" },
+    { key: "cme_speed", label: t("nasaLabelCme"), source: t("nasaSourceCme"), timeKey: "cme_time", unit: " km/s" },
+    { key: "flare", label: t("nasaLabelFlr"), source: t("nasaSourceFlr"), timeKey: "flare_time", unit: "" },
+    { key: "solar_wind", label: t("nasaLabelWind"), source: t("nasaSourceWind"), timeKey: "wind_time", unit: " km/s" },
+    { key: "mag_bt", label: t("nasaLabelMag"), source: t("nasaSourceMag"), timeKey: "mag_time", unit: " nT" }
+  ];
+  const get = p => fetch(p).then(r => r.ok ? r.json() : null).catch(() => null);
+  get("/api/nasa/live").then(d => {
+    const data = d && d.data ? d.data : null;
+    const sb = document.getElementById("nasa-sources");
+    if (!sb) return;
+    if (!data) {
+      sb.innerHTML = '<p class="muted">' + t("nasaUnavailable") + '</p>';
+      return;
+    }
+    sb.innerHTML = sources.map(s => {
+      const v = data[s.key] !== null && data[s.key] !== undefined ? data[s.key] : null;
+      const ok = v !== null;
+      const status = ok ? t("nasaOk") : t("nasaSinDatos");
+      const cls = ok ? "nasa-ok" : "nasa-sindatos";
+      const val = ok ? esc(Number(v).toString()) + esc(s.unit) : "—";
+      const time = data[s.timeKey] ? esc(data[s.timeKey]) : "—";
+      return '<div class="nasa-row">' +
+        '<span class="nasa-label">' + esc(s.label) + '</span>' +
+        '<span class="nasa-value ' + cls + '">' + val + '</span>' +
+        '<span class="nasa-source">' + esc(s.source) + '</span>' +
+        '<span class="nasa-time">' + t("nasaTime").replace("{time}", time) + '</span>' +
+        '<span class="nasa-status ' + cls + '">' + status + '</span>' +
+        '</div>';
+    }).join("");
+  }).catch(() => {
+    const sb = document.getElementById("nasa-sources");
+    if (sb) sb.innerHTML = '<p class="muted">' + t("nasaUnavailable") + '</p>';
+  });
+}
+
 function route() {
   const id = location.hash.slice(1);
+  if (SIMPLE_MODE && (id === "metrics" || id === "components")) {
+    location.hash = "objectives";
+    return;
+  }
   const b = BUTTONS.find(b => b.id === id && !b.url);
   const isMetrics = id === "metrics";
   const isDifficulty = id === "difficulty";
   const isComponents = id === "components";
-  $("#detail").hidden = !b && !isMetrics && !isDifficulty && !isComponents;
+  const isNasa = id === "nasa";
+  $("#detail").hidden = !b && !isMetrics && !isDifficulty && !isComponents && !isNasa;
   // El boton «Métricas y algoritmos» sobra cuando ya estas viendo las métricas.
   const mBtn = document.getElementById("metricsBtn");
   if (mBtn) mBtn.hidden = isMetrics;
   if (isMetrics) { renderMetrics(); return; }
   if (isDifficulty) { renderDifficulty(); return; }
   if (isComponents) { renderComponents(); return; }
+  if (isNasa) { renderNasa(); return; }
   if (!b) return;
   if (b.id === "objectives") {
-    const extra = '<div class="slider-row"><label><span>' + t("objectivesDuration") + '</span> <span id="objDurVal">' + missionDays + '</span> <span class="slider-unit">' + t("objectivesDays") + '</span></label><input type="range" id="objDurSlider" min="1" max="30" value="' + missionDays + '"></div>';
+    let extra = "";
+    if (!SIMPLE_MODE) {
+      extra = '<div class="slider-row"><label><span>' + t("objectivesDuration") + '</span> <span id="objDurVal">' + missionDays + '</span> <span class="slider-unit">' + t("objectivesDays") + '</span></label><input type="range" id="objDurSlider" min="1" max="30" value="' + missionDays + '"></div>';
+    }
     optionList(t("objectivesTitle"), t("objectivesSub"),
       MISSIONS, sel.objetivo, opt => { sel.objetivo = opt.id; }, extra);
   } else if (b.id === "orbit") {
@@ -1310,14 +1587,16 @@ $("#backBtn").addEventListener("click", () => { location.hash = ""; });
 $("#metricsTopBtn").addEventListener("click", () => { location.hash = "metrics"; });
 $("#diffTopBtn").addEventListener("click", () => { location.hash = "difficulty"; });
 $("#compTopBtn").addEventListener("click", () => { location.hash = "components"; });
-// v15: forzar un poll manual de las APIs de la NASA (util en la demo:
-// el jugador no tiene que esperar al poll automatico de 60 s).
+// v15: el boton Datos NASA abre el panel con las 5 fuentes en vivo
+// (valor, hora de consulta, estado OK / SIN DATOS). Tambien dispara un
+// poll manual para que los datos esten frescos al abrir.
 $("#refreshTopBtn").addEventListener("click", () => {
   showToast(t("refreshPolling"));
   fetch("/api/nasa/poll", { method: "POST" })
     .then(r => r.ok ? r.json() : null)
     .then(d => { showToast(d && d.ok ? t("refreshOk") : t("refreshFail")); })
     .catch(() => { showToast(t("refreshFail")); });
+  location.hash = "nasa";
 });
 document.addEventListener("keydown", e => { if (e.key === "Escape") location.hash = ""; });
 
@@ -1377,6 +1656,7 @@ const fmt1 = (n) => String(Math.round(Number(n) * 10) / 10);
 
 // El HUD refleja la configuracion de mision elegida (o 0 si aun no hay).
 function syncHud() {
+  if (SIMPLE_MODE) return;
   const cfg = currentConfig();
   const result = computeMissionScore(cfg);
   const res = resourcesOf(cfg);
