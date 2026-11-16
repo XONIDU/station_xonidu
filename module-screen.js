@@ -813,6 +813,9 @@
           }
           var b = e.target && e.target.closest ? e.target.closest(".repair-step") : null;
           if (!b || b.disabled) return;
+          // El boton "Aplicar valor" del potenciometro se maneja arriba con [data-dial-apply];
+          // este handler general no debe tocarlo ni poner busy.
+          if (b.hasAttribute("data-dial-apply")) return;
           var modId = b.getAttribute("data-mod");
           var stepIdx = parseInt(b.getAttribute("data-step"), 10);
           var prog = repairProgress[modId];

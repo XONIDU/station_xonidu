@@ -355,6 +355,11 @@ RANK = {"ok": 0, "warn": 1, "crit": 2}
 # cuanto se libera un hueco (al reparar un modulo o al recuperarse).
 PENDING_ANOMALIES = []  # [{zona, slug, nivel, reason}]
 
+# v21: modo fácil — anomalías tipo FNAF, sin datos reales de la NASA.
+# 1 anomalía por noche (por ciclo de día), máximo 2 activas a la vez,
+# pseudo-aleatoria, sin saturar al jugador.
+FACIL_LAST_DAY = None
+
 # v19.4: marca de tiempo de la ultima reparacion (un modulo paso a ok).
 # Mientras no hayan pasado 60 s desde la reparacion,
 # _drain_pending_anomalies no suelta la siguiente anomalia de la cola, para
@@ -888,20 +893,68 @@ def _aplicar_senales_tempranas(kp, cme_speed, flr_rank):
                 _set_module_state(zona, slug, "ok")
 
 
+# v21: MODO FÁCIL — anomalías tipo FNAF, sin datos reales de la NASA.
+# 1 anomalía por noche (por ciclo de día), máximo 2 activas a la vez,
+# pseudo-aleatoria, sin saturar al jugador.
+FACIL_MODULES = [
+    ("a", "habitability"), ("a", "health"), ("a", "eclss"), ("a", "fire"), ("a", "radiation"),
+    ("b", "food"), ("b", "thermal"), ("b", "energy"), ("b", "fire"),
+    ("c", "eclss"), ("c", "energy"), ("c", "thermal"), ("c", "command"),
+    ("d", "command"), ("d", "navigation"), ("d", "comms"), ("d", "robotics"),
+    ("e", "structure"), ("e", "robotics-eva"), ("e", "fire"),
+    ("f", "energy"), ("f", "thermal"), ("f", "comms"), ("f", "science"),
+    ("f", "structure"), ("f", "propulsion"), ("f", "radiation"),
+]
+
+
+def _facil_poll():
+    """Modo fácil: genera 1 anomalía pseudo-aleatoria por noche (por ciclo
+    de día), máximo 2 activas a la vez. No consulta la NASA."""
+    global FACIL_LAST_DAY
+
+    if not MISSION["active"] or not MISSION["start"]:
+        return
+
+    # Día actual de la misión (1 minuto real = 1 día en modo fácil).
+    total = MISSION["days"] * MISSION["min_per_day"]
+    elapsed = (_utcnow() - MISSION["start"]).total_seconds() / 60.0
+    day = int(elapsed // MISSION["min_per_day"]) + 1
+
+    # Solo generar si es un día nuevo y no hemos generado para este día.
+    if FACIL_LAST_DAY == day:
+        return
+    FACIL_LAST_DAY = day
+
+    # Si ya hay el máximo de anomalías activas, no generar más.
+    if _count_anomalies() >= _max_anomalies():
+        return
+
+    # Elegir un módulo aleatorio que esté en "ok".
+    modulos_ok = [(z, s) for z, mods in STATE["modulos"].items()
+                  for s, niv in mods.items() if niv == "ok"]
+
+    if not modulos_ok:
+        return
+
+    # Pseudo-aleatorio basado en el día (reproducible, no satura).
+    import random
+    rng = random.Random(1000 + day)
+    zona, slug = rng.choice(modulos_ok)
+
+    _apply_nasa_anomaly(zona, slug, "warn", f"falla nocturna día {day}")
+    print(f"[FACIL] Anomalía aleatoria día {day}: {zona}.{slug} -> warn")
+
+
 def procesar_eventos_nasa():
     """Consulta las 5 APIs de la NASA, detecta eventos y actualiza estados.
 
-    JUEGO REAL (sin simulaciones):
-    - Solo se aplican eventos RECIENTES (peak/start dentro de
-      event_fresh_hours). Un evento viejo ya no es una amenaza vigente.
-    - Un evento discreto (FLR/CME) se aplica UNA vez: si el jugador atiende
-      el modulo (clic), el poll no lo vuelve a subir mientras el evento
-      siga vigente. Cuando el evento caduca, el modulo se recupera solo.
-    - Kp es una condicion continua: mientras Kp >= warn, radiacion esta en
-      alerta; si el jugador la atiende, no se vuelve a subir hasta que
-      llegue una lectura Kp nueva (nuevo episodio).
-    - Un modulo en warn sin atender durante attend_window_min escala a crit.
+    En modo fácil no consulta la NASA: genera 1 anomalía pseudo-aleatoria
+    por noche (tipo FNAF), máximo 2 activas a la vez.
     """
+    # v21: modo fácil — sin datos reales de la NASA.
+    if GAME_CONFIG.get("difficulty") == "facil":
+        _facil_poll()
+        return
     global KP_EPISODE
     resultados = {}
     fresh_hours = GAME_CONFIG.get("event_fresh_hours", 24)
@@ -1608,6 +1661,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             STATE["reinforced"] = []
             STATE["warn_since"] = {}
             KP_EPISODE = None
+            global FACIL_LAST_DAY
+            FACIL_LAST_DAY = None
             for zona_mods in STATE["modulos"].values():
                 for slug in zona_mods:
                     zona_mods[slug] = "ok"
