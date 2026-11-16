@@ -1,107 +1,107 @@
 # XONIDU Station — Space Mission Design Game
 
-Juega ahora: **https://station.xonidu.com**
+Play now: **https://station.xonidu.com**
 
-Xonidu Station es un videojuego de diseño de misiones espaciales. Operas la estación espacial Xonidu: eliges una misión, una órbita y un vehículo de lanzamiento, y gestionas recursos limitados mientras eventos reales amenazan tu misión.
+Xonidu Station is a space mission design video game. You operate the Xonidu space station: you choose a mission, an orbit and a launch vehicle, and you manage limited resources while real events threaten your mission.
 
-Hecho por el equipo Xonidu para el NASA Space Apps Challenge 2026, reto Space Mission Design Game, evento local de Puerto Vallarta. El equipo recibió una Mención Honorífica en Best Mission Concept.
+Built by Team Xonidu for the NASA Space Apps Challenge 2026, Space Mission Design Game challenge, Puerto Vallarta Local Event. The team received an Honorable Mention in Best Mission Concept.
 
-Proyecto en Space Apps: https://www.spaceappschallenge.org/2026/find-a-team/xonidu/?tab=project
+Space Apps project: https://www.spaceappschallenge.org/2026/find-a-team/xonidu/?tab=project
 
-## Cómo se juega
+## How to play
 
-- Elige una de 9 misiones: reparación de satélites, captura de carga con el brazo robótico, caminatas espaciales (EVA), despliegue de CubeSats, ciencia en microgravedad, observación de la Tierra, pruebas de tecnología para la Luna y Marte, extensión de vida de satélites y observación astronómica.
-- Elige una órbita: LEO, GEO, polar, heliosíncrona o heliocéntrica.
-- Elige un lanzador: Falcon 9, Atlas V o Ariane 5.
-- Diseña tu nave con 6 sistemas (nave, instrumentos científicos, energía, comunicaciones, control térmico y propulsión) que mueven MASA, ENERGÍA, PRESUPUESTO, DATOS y COMBUSTIBLE.
-- Gestiona la estación: 6 zonas y 27 módulos. Cada módulo es una mini web que se abre en pantalla completa. Cuando un módulo entra en advertencia o en estado crítico, su zona parpadea en el mapa y tienes que atenderlo antes de que empeore.
-- Una misión dura de 1 a 30 días en el reloj de la estación, y cada día toma de 1 a 3 minutos reales según la dificultad.
-- Dificultad: Fácil (eventos simulados, 2 pasos de reparación, sin penalización), Medio (3 pasos) y Difícil (mecánicas completas, diagnóstico con penalización y secuencia en fallos críticos).
+- Pick one of 9 missions: satellite servicing, cargo capture with the robotic arm, EVA spacewalks, CubeSat deployment, microgravity science, Earth observation, Moon and Mars technology tests, satellite life extension, and astronomical observation.
+- Pick an orbit: LEO, GEO, polar, Sun-synchronous or heliocentric.
+- Pick a launch vehicle: Falcon 9, Atlas V or Ariane 5.
+- Design your spacecraft with 6 systems (spacecraft, science instruments, power, communications, thermal control and propulsion) that move MASS, POWER, BUDGET, DATA and FUEL.
+- Run the station: 6 zones and 27 modules. Each module is a mini web that opens fullscreen. When a module goes into warning or critical state, its zone blinks on the map and you have to attend it before it gets worse.
+- A mission lasts 1 to 30 days on the station clock, and each day takes 1 to 3 real minutes depending on difficulty.
+- Difficulty: Easy (simulated events, 2 repair steps, no penalty), Medium (3 steps) and Hard (full mechanics, diagnosis with penalty and sequence on critical failures).
 
-## Datos reales de NASA y NOAA
+## Live NASA and NOAA data
 
-En modo Medio y Difícil, las anomalías vienen de datos en vivo, no de un guion. En modo Fácil los eventos son simulados.
+On Medium and Hard, anomalies come from live data, not from a script. On Easy the events are simulated.
 
-| Fuente | Dato | Uso en el juego |
-|--------|------|-----------------|
-| SWPC / NOAA | Índice Kp geomagnético y alertas | Radiación y comunicaciones |
-| DONKI / NASA | CME y llamaradas solares | Energía, radiación y comunicaciones |
-| DSCOVR / SWPC | Viento solar y campo magnético Bt | Comunicaciones y radiación |
-| NASA NeoWs | Asteroides cercanos a la Tierra | Navegación y estructura |
-| NASA DSN | Estado de las antenas del espacio profundo | Comunicaciones |
-| NASA APOD | Foto astronómica del día | Contenido del juego |
+| Source | Data | Used for |
+|--------|------|----------|
+| SWPC / NOAA | Geomagnetic Kp index and alerts | Radiation and communications |
+| DONKI / NASA | CMEs and solar flares | Energy, radiation and communications |
+| DSCOVR / SWPC | Solar wind and magnetic field Bt | Communications and radiation |
+| NASA NeoWs | Near-Earth asteroids | Navigation and structure |
+| NASA DSN | Deep Space Network antenna status | Communications |
+| NASA APOD | Astronomy Picture of the Day | In-game content |
 
-El botón Datos NASA del menú muestra las fuentes en vivo con su valor actual, hora de consulta y estado. Si una fuente no responde, nunca se inventan datos.
+The Datos NASA button in the menu shows the live sources with their current value, query time and status. If a source fails, data is never invented.
 
-Solo las CME dirigidas a la Tierra se consideran amenaza: el filtro verifica `enlilList[].isEarthGB` y la lista de impactos en DONKI. Las CME que se alejan se ignoran.
+Only Earth-directed CMEs count as a threat: the filter checks `enlilList[].isEarthGB` and the impact list in DONKI. CMEs heading away are ignored.
 
-## Arquitectura
+## Architecture
 
-- **Frontend:** HTML5, CSS3, JavaScript vanilla (sin frameworks). Menú principal en `menu/`, mapa de la estación en `station-map/`, 27 módulos en `zone-a/` a `zone-f/`, lógica compartida en `store.js`, `missions.js` y `module-screen.js`.
-- **Backend:** Python con `http.server` de la librería estándar + `websockets` (`station-backend.py`). HTTP en el puerto 5000, WebSocket en el 5001.
-- El backend es un proxy único para los datos en vivo, con caché de 10 minutos. La clave de NASA vive solo en el backend, nunca en el frontend.
-- Si el WebSocket no está disponible, el juego usa HTTP polling (`POST /api/module`) para el estado y las reparaciones.
-- **Despliegue:** Render (plan gratuito) en https://station.xonidu.com, con dominio personalizado por CNAME en Cloudflare.
+- **Frontend:** HTML5, CSS3, vanilla JavaScript (no frameworks). Main menu in `menu/`, station map in `station-map/`, 27 modules in `zone-a/` to `zone-f/`, shared logic in `store.js`, `missions.js` and `module-screen.js`.
+- **Backend:** Python with the standard library `http.server` + `websockets` (`station-backend.py`). HTTP on port 5000, WebSocket on port 5001.
+- The backend is a single proxy for live data, with a 10-minute cache. The NASA API key lives only in the backend, never in the frontend.
+- When the WebSocket is not available, the game uses HTTP polling (`POST /api/module`) for state and repairs.
+- **Deployment:** Render (free plan) at https://station.xonidu.com, with a custom domain via CNAME on Cloudflare.
 
-Endpoints del backend:
+Backend endpoints:
 
-- `GET /api/nasa/live` — Todos los valores en vivo en JSON compacto.
+- `GET /api/nasa/live` — All live values in compact JSON.
 - `GET /api/nasa/kp`, `/api/nasa/cme`, `/api/nasa/flr`, `/api/nasa/wind`, `/api/nasa/mag`, `/api/nasa/dsn`, `/api/nasa/neo`, `/api/nasa/alerts`.
-- `POST /api/nasa/poll` — Fuerza una actualización manual de datos NASA.
-- `GET /api/config`, `POST /api/config` — Lee y escribe la configuración (umbrales, puntuación, dificultad).
+- `POST /api/nasa/poll` — Forces a manual NASA data refresh.
+- `GET /api/config`, `POST /api/config` — Read and write configuration (thresholds, scoring, difficulty).
 
-## Correr en local
+## Run locally
 
 ```bash
 python station-backend.py
 ```
 
-Abre http://localhost:5000
+Open http://localhost:5000
 
-Opcional: crea `db/.env` con tu clave:
+Optional: create `db/.env` with your key:
 
 ```
-NASA_API_KEY=tu_clave_de_api.nasa.gov
+NASA_API_KEY=your_key_from_api.nasa.gov
 ```
 
-Solo NeoWs y APOD necesitan la clave. Sin clave, el juego usa `DEMO_KEY` y el resto de las fuentes sigue en vivo. Nunca subas `db/.env` a git.
+Only NeoWs and APOD need the key. Without a key, the game uses `DEMO_KEY` and the other sources stay live. Never commit `db/.env` to git.
 
-## Despliegue en Render
+## Deploy on Render
 
 - Build Command: `pip install -r requirements.txt`
 - Start Command: `python station-backend.py`
-- El backend lee el puerto de la variable de entorno `PORT`.
-- Dominio personalizado: registro CNAME `station` apuntando a `xonidu-station.onrender.com`, en modo DNS only.
+- The backend reads the port from the `PORT` environment variable.
+- Custom domain: CNAME record `station` pointing to `xonidu-station.onrender.com`, DNS only.
 
-## Estructura
+## Structure
 
 ```
 station_xonidu/
 ├── station-backend.py   # Backend (HTTP 5000, WebSocket 5001)
-├── requirements.txt     # Dependencias de Python
-├── menu/                # Pantalla del menú principal
-├── station-map/         # Mapa visual de la estación
-├── zone-a/ ... zone-f/  # Zonas y módulos del juego
-├── module-screen.js     # Lógica de pantallas de módulos
-├── missions.js          # Misiones, órbitas y lanzadores
-└── store.js             # Estado compartido del juego
+├── requirements.txt     # Python dependencies
+├── menu/                # Main menu screen
+├── station-map/         # Visual station map
+├── zone-a/ ... zone-f/  # Game zones and modules
+├── module-screen.js     # Module screen logic
+├── missions.js          # Missions, orbits and launchers
+└── store.js             # Shared game state
 ```
 
-`game_config.json` y `db/.env` son archivos locales y no están en el repositorio.
+`game_config.json` and `db/.env` are local files and are not in the repository.
 
-## Equipo
+## Team
 
-- Darian Alberto Camacho Salas — Team Owner, backend, base de datos, seguridad, despliegue
+- Darian Alberto Camacho Salas — Team Owner, backend, database, security, deployment
 - Oscar Gutiérrez Plata
 - Raul Arteaga Rodriguez
 - Oscar Rodolfo Barragán Pérez
 - Braulio Mauricio Anaya Mendez
 - Wendy Génesis Ashlan Hernández Hernández
 
-## Herramientas de Super Inteligencia
+## Super Intelligence tools
 
-Muse (asistente de Meta AI) y Claude, para código, arquitectura, redacción y revisión.
+Muse (Meta AI assistant) and Claude, for code, architecture, writing and review.
 
-## Notas
+## Notes
 
-- Los datos de la NASA y la NOAA son gratuitos y públicos. Usarlos no implica respaldo de la NASA.
+- NASA and NOAA data is free and public. Using it does not imply NASA endorsement.
