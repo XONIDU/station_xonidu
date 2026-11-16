@@ -76,7 +76,7 @@ def supabase_table(table: str):
     return _supabase.table(table)
 
 WEB_DIR = Path(__file__).resolve().parent  # /home/albert/xonidu/nasa/
-HTTP_PORT = 5000
+HTTP_PORT = int(os.environ.get("PORT", 5000))
 WS_PORT = 5001
 
 # ---------------------------------------------------------------------------
