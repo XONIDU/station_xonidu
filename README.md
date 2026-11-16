@@ -1,151 +1,107 @@
 # XONIDU Station — Space Mission Design Game
 
-Sistema profesional de diseño de misiones espaciales con datos reales de clima espacial de la NASA y la NOAA. El jugador diseña una nave, elige órbita y lanzador, selecciona una de nueve misiones y gestiona módulos de estación espacial bajo condiciones reales de clima espacial (tormentas geomagnéticas, llamaradas solares, CME, viento solar, campo magnético, asteroides y red DSN).
+Juega ahora: **https://station.xonidu.com**
 
----
+Xonidu Station es un videojuego de diseño de misiones espaciales. Operas la estación espacial Xonidu: eliges una misión, una órbita y un vehículo de lanzamiento, y gestionas recursos limitados mientras eventos reales amenazan tu misión.
 
-## Arquitectura del sistema
+Hecho por el equipo Xonidu para el NASA Space Apps Challenge 2026, reto Space Mission Design Game, evento local de Puerto Vallarta. El equipo recibió una Mención Honorífica en Best Mission Concept.
 
-### Frontend
-- **Tecnología:** HTML5, CSS3, JavaScript vanilla (sin frameworks).
-- **Menú principal:** `menu/index.html` + `menu/app.js` + `menu/style.css`.
-- **Pantallas de módulos:** `module-screen.js` (24 pantallas en zonas A-F).
-- **Mapa de estación:** `station-map/index.html` con mapa visual de 6 zonas.
+Proyecto en Space Apps: https://www.spaceappschallenge.org/2026/find-a-team/xonidu/?tab=project
 
-### Backend
-- **Tecnología:** Python + Flask.
-- **Archivo principal:** `station-backend.py`.
-- **Puertos:** HTTP 5000, WebSocket 5001.
-- **Configuración persistente:** `game_config.json` (umbrales, scoring, dificultad).
-- **Variables de entorno:** `db/.env` (NASA_API_KEY, solo lectura).
+## Cómo se juega
 
-### Integración NASA / NOAA (datos reales, no simulados)
-El backend consulta APIs reales mediante proxy oculto:
+- Elige una de 9 misiones: reparación de satélites, captura de carga con el brazo robótico, caminatas espaciales (EVA), despliegue de CubeSats, ciencia en microgravedad, observación de la Tierra, pruebas de tecnología para la Luna y Marte, extensión de vida de satélites y observación astronómica.
+- Elige una órbita: LEO, GEO, polar, heliosíncrona o heliocéntrica.
+- Elige un lanzador: Falcon 9, Atlas V o Ariane 5.
+- Diseña tu nave con 6 sistemas (nave, instrumentos científicos, energía, comunicaciones, control térmico y propulsión) que mueven MASA, ENERGÍA, PRESUPUESTO, DATOS y COMBUSTIBLE.
+- Gestiona la estación: 6 zonas y 27 módulos. Cada módulo es una mini web que se abre en pantalla completa. Cuando un módulo entra en advertencia o en estado crítico, su zona parpadea en el mapa y tienes que atenderlo antes de que empeore.
+- Una misión dura de 1 a 30 días en el reloj de la estación, y cada día toma de 1 a 3 minutos reales según la dificultad.
+- Dificultad: Fácil (eventos simulados, 2 pasos de reparación, sin penalización), Medio (3 pasos) y Difícil (mecánicas completas, diagnóstico con penalización y secuencia en fallos críticos).
 
-| Fuente | API | Dato |
-|--------|-----|------|
-| SWPC/NOAA | services.swpc.noaa.gov | Índice Kp geomagnético, alertas de clima espacial |
-| DONKI/NASA | ccmc.gsfc.nasa.gov/DONKI-API | CME, llamaradas solares |
-| DSCOVR/SWPC | services.swpc.noaa.gov/json/rtsw | Viento solar, campo magnético Bt |
-| NASA NeoWs | api.nasa.gov/neo/rest/v1 | Asteroides cercanos a la Tierra |
-| NASA DSN | eyes.nasa.gov/dsn/data/dsn.xml | Antenas del espacio profundo |
-| ISS | api.wheretheiss.at | Posición de la Estación Espacial Internacional |
+## Datos reales de NASA y NOAA
 
-**Endpoints del backend:**
+En modo Medio y Difícil, las anomalías vienen de datos en vivo, no de un guion. En modo Fácil los eventos son simulados.
+
+| Fuente | Dato | Uso en el juego |
+|--------|------|-----------------|
+| SWPC / NOAA | Índice Kp geomagnético y alertas | Radiación y comunicaciones |
+| DONKI / NASA | CME y llamaradas solares | Energía, radiación y comunicaciones |
+| DSCOVR / SWPC | Viento solar y campo magnético Bt | Comunicaciones y radiación |
+| NASA NeoWs | Asteroides cercanos a la Tierra | Navegación y estructura |
+| NASA DSN | Estado de las antenas del espacio profundo | Comunicaciones |
+| NASA APOD | Foto astronómica del día | Contenido del juego |
+
+El botón Datos NASA del menú muestra las fuentes en vivo con su valor actual, hora de consulta y estado. Si una fuente no responde, nunca se inventan datos.
+
+Solo las CME dirigidas a la Tierra se consideran amenaza: el filtro verifica `enlilList[].isEarthGB` y la lista de impactos en DONKI. Las CME que se alejan se ignoran.
+
+## Arquitectura
+
+- **Frontend:** HTML5, CSS3, JavaScript vanilla (sin frameworks). Menú principal en `menu/`, mapa de la estación en `station-map/`, 27 módulos en `zone-a/` a `zone-f/`, lógica compartida en `store.js`, `missions.js` y `module-screen.js`.
+- **Backend:** Python con `http.server` de la librería estándar + `websockets` (`station-backend.py`). HTTP en el puerto 5000, WebSocket en el 5001.
+- El backend es un proxy único para los datos en vivo, con caché de 10 minutos. La clave de NASA vive solo en el backend, nunca en el frontend.
+- Si el WebSocket no está disponible, el juego usa HTTP polling (`POST /api/module`) para el estado y las reparaciones.
+- **Despliegue:** Render (plan gratuito) en https://station.xonidu.com, con dominio personalizado por CNAME en Cloudflare.
+
+Endpoints del backend:
+
 - `GET /api/nasa/live` — Todos los valores en vivo en JSON compacto.
 - `GET /api/nasa/kp`, `/api/nasa/cme`, `/api/nasa/flr`, `/api/nasa/wind`, `/api/nasa/mag`, `/api/nasa/dsn`, `/api/nasa/neo`, `/api/nasa/alerts`.
-- `POST /api/nasa/poll` — Forza actualización manual de datos NASA.
-- `GET /api/config`, `POST /api/config` — Lee/escribe configuración en `game_config.json`.
+- `POST /api/nasa/poll` — Fuerza una actualización manual de datos NASA.
+- `GET /api/config`, `POST /api/config` — Lee y escribe la configuración (umbrales, puntuación, dificultad).
 
----
+## Correr en local
 
-## Características principales
+```bash
+python station-backend.py
+```
 
-### Panel de Datos NASA (menú)
-El botón `🔄 Datos NASA` abre un panel con 5 fuentes en vivo:
-1. Índice Kp (geomagnetismo) — SWPC/NOAA
-2. Velocidad de CME dirigida a la Tierra — DONKI/NASA
-3. Última llamarada solar — DONKI/NASA
-4. Viento solar (protones) — DSCOVR/SWPC
-5. Campo magnético Bt — DSCOVR/SWPC
+Abre http://localhost:5000
 
-Cada fuente muestra: **valor actual, hora de la última consulta, estado OK o SIN DATOS**. Si una fuente no responde, nunca se inventan datos.
+Opcional: crea `db/.env` con tu clave:
 
-### Ecuaciones de integración NASA — todas visibles y editables
-Desde el panel Métricas se pueden ver y editar todos los umbrales que rigen las reglas de clima espacial:
+```
+NASA_API_KEY=tu_clave_de_api.nasa.gov
+```
 
-| Ecuación | Fuente científica | Umbrales editables |
-|----------|-------------------|-------------------|
-| Radiación Kp | NOAA SWPC (Kp ≥ 5 = tormenta G1) | `kp_warn`, `kp_crit` |
-| Llamarada solar | DONKI/NASA (clase M = nivel R1) | `flr_min_class` |
-| CME terrestre | DONKI/NASA (solo Earth-directed) | `cme_speed_warn`, `cme_fast_speed` |
-| Viento solar | DSCOVR/SWPC (> 600 km/s) | `wind_speed_warn` |
-| Campo Bt | DSCOVR/SWPC (> 10 nT) | `mag_bt_warn` |
-| Asteroides NeoWs | NASA NeoWs | regla de presencia |
-| DSN | NASA DSN | `dsn_min_active` |
-| Escalado de fallos | regla interna del juego | `attend_window_sec` |
+Solo NeoWs y APOD necesitan la clave. Sin clave, el juego usa `DEMO_KEY` y el resto de las fuentes sigue en vivo. Nunca subas `db/.env` a git.
 
-Cada ecuación muestra su fórmula completa, campos numéricos editables, fuente científica y qué módulos del juego afecta. Los valores se guardan en `game_config.json` y se aplican en el siguiente poll de la NASA (cada 60 s).
+## Despliegue en Render
 
-### Filtro Earth-direction de CME (sin falsos positivos)
-Solo las CME dirigidas a la Tierra se consideran amenaza. El filtro verifica `enlilList[].isEarthGB` e `enlilList[].impactList[].location == "Earth"` en DONKI. Las CME que se alejan se ignoran automáticamente.
+- Build Command: `pip install -r requirements.txt`
+- Start Command: `python station-backend.py`
+- El backend lee el puerto de la variable de entorno `PORT`.
+- Dominio personalizado: registro CNAME `station` apuntando a `xonidu-station.onrender.com`, en modo DNS only.
 
-### Modo demo (configurable, no automático)
-Un toggle en el panel NASA activa/desactiva "umbrales sensibles para mostrar el mecanismo". El operador lo controla desde la interfaz; no se activa por defecto.
-
-### Dificultades y modo simple
-- **Fácil:** nave ya diseñada (6/6 sistemas), ocultas métricas/componentes/NASA, menos anomalías.
-- **Medio:** 3/6 sistemas listos, umbrales normales.
-- **Difícil:** diseñas la nave (0/6), umbrales más estrictos, más anomalías.
-- **Modo simple (fácil):** solo misiones, selector de órbita, selector de vehículo e iniciar misión.
-
----
-
-## Validación del sistema
-
-Existe un validador independiente que:
-
-- Lee `NASA_API_KEY` desde `db/.env` (solo lectura, no modifica nada del juego).
-- Consulta las mismas URLs de la NASA que el backend.
-- Verifica el filtro Earth-direction de CME.
-- Verifica las 9 misiones, 6 zonas, 27 módulos y 24 pantallas HTML.
-- Reporta NULL cuando una fuente no responde (nunca "OK" con datos vacíos).
-
-**Resultado: 5/5** — todas las 8 fuentes respondieron con datos reales, sin falsos positivos de CME, estado global correcto.
-
----
-
-## Despliegue en producción (sin túnel)
-
-- **Servidor:** VPS con IP pública directa.
-- **Stack:** Flask + Gunicorn + Nginx + Certbot/Let's Encrypt.
-- **Puerto HTTP:** 5000 (detrás de Nginx en 80/443).
-- **SSL:** Certbot con renovación automática.
-- **No se usa túnel:** acceso directo por IP pública.
-- **Firewall:** ufw, solo SSH (22), HTTP (80) y HTTPS (443) abiertos.
-
----
-
-## Estructura de archivos
+## Estructura
 
 ```
 station_xonidu/
-├── menu/
-│   ├── index.html      # Pantalla del menú principal
-│   ├── app.js          # Lógica del menú, panel NASA, métricas, ecuaciones
-│   ├── style.css       # Estilos del menú
-│   └── menu.png        # Imagen de fondo del menú
-├── station-backend.py  # Backend Flask (HTTP 5000, WebSocket 5001)
-├── game_config.json    # Configuración persistente (umbrales, scoring)
-├── db/.env             # NASA_API_KEY (solo lectura, no subir a git)
-├── module-screen.js    # Lógica de pantallas de módulos (24 pantallas)
-├── station-map/
-│   ├── index.html      # Mapa visual de la estación
-│   └── style.css       # Estilos del mapa
-└── zone-*/modulos/*.html  # 24 pantallas de módulos (zonas A-F)
+├── station-backend.py   # Backend (HTTP 5000, WebSocket 5001)
+├── requirements.txt     # Dependencias de Python
+├── menu/                # Pantalla del menú principal
+├── station-map/         # Mapa visual de la estación
+├── zone-a/ ... zone-f/  # Zonas y módulos del juego
+├── module-screen.js     # Lógica de pantallas de módulos
+├── missions.js          # Misiones, órbitas y lanzadores
+└── store.js             # Estado compartido del juego
 ```
 
----
+`game_config.json` y `db/.env` son archivos locales y no están en el repositorio.
 
-## Variables de entorno requeridas
+## Equipo
 
-| Variable | Descripción | Archivo |
-|----------|-------------|---------|
-| `NASA_API_KEY` | Clave de API de NASA (para NeoWs) | `db/.env` |
+- Darian Alberto Camacho Salas — Team Owner, backend, base de datos, seguridad, despliegue
+- Oscar Gutiérrez Plata
+- Raul Arteaga Rodriguez
+- Oscar Rodolfo Barragán Pérez
+- Braulio Mauricio Anaya Mendez
+- Wendy Génesis Ashlan Hernández Hernández
 
----
+## Herramientas de Super Inteligencia
 
-## Comandos útiles
+Muse (asistente de Meta AI) y Claude, para código, arquitectura, redacción y revisión.
 
-- Iniciar backend: `python3 station-backend.py`
-- Ejecutar validador: `python3 validar_xonidu_sistema.py`
+## Notas
 
----
-
-## Modelo de precios (mensual)
-
-| Plan | Precio | Dispositivos | Uso |
-|------|--------|--------------|-----|
-| Demo | $6–12 | 20–30 | Aula pequeña, demostración |
-| Producción | $31–36 | 50–100 | Operación estándar |
-| Escala | $50–80 | 100+ | Despliegue masivo |
+- Los datos de la NASA y la NOAA son gratuitos y públicos. Usarlos no implica respaldo de la NASA.
